@@ -16,7 +16,7 @@ RUN npm run build
 # ───────────────────────────────────────────────────────────
 # Stage 2 — Production image (minimal)
 # ───────────────────────────────────────────────────────────
-FROM --platform=linux/amd64 node:20-alpine AS production
+FROM --platform=linux/amd64 node:20-alpine AS runner
 
 WORKDIR /app
 

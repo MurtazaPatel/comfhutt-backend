@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_ID: comfhutt-backend
+  PROJECT_ID: ${{ secrets.PROJECT_ID }}
   REGION: asia-south1
   SERVICE_NAME: comfhutt-backend
   REGISTRY: asia-south1-docker.pkg.dev
-  IMAGE: asia-south1-docker.pkg.dev/comfhutt-backend/comfhutt-backend/api
+  IMAGE: asia-south1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/comfhutt-backend/api
 
 jobs:
   deploy:
