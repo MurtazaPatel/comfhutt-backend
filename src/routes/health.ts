@@ -10,6 +10,7 @@ router.get("/", (_req: Request, res: Response) => {
   res.json({
     status: "ok",
     service: "comfhutt-backend",
+    version: "1.0.1",
   });
 });
 

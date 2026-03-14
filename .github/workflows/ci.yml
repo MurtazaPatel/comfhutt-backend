@@ -1,0 +1,30 @@
+name: CI — Pull Request Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: TypeScript Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Node.js 20 ─────────────────────────────────
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      # ── 3. Install dependencies ───────────────────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 4. TypeScript compile check ───────────────────────────
+      - name: Build (TypeScript compile)
+        run: npm run build

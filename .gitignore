@@ -19,6 +19,11 @@ dist/
 .DS_Store
 Thumbs.db
 
+# GCP Service Account Keys (NEVER commit these)
+github-actions-key.json
+*.json.key
+serviceaccount*.json
+
 # Logs
 *.log
 npm-debug.log*
