@@ -6,6 +6,7 @@ import earlyAccessRouter from "./early-access";
 import developerOnboardingRouter from "./developer-onboarding";
 import propertiesRouter from "./properties";
 import authRouter from "./auth";
+import authEmailHookRouter from "./auth-email-hook";
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use("/api/early-access", earlyAccessRouter);
 router.use("/api/developer-onboarding", developerOnboardingRouter);
 router.use("/api/properties", propertiesRouter);
 router.use("/api/auth", authRouter);
+router.use("/api/auth-email-hook", authEmailHookRouter);
 
 export default router;
