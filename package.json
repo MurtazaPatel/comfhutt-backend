@@ -15,6 +15,7 @@
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.99.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
@@ -22,6 +23,7 @@
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
+    "opossum": "^8.5.0",
     "resend": "^6.9.3",
     "zod": "^4.3.6"
   },
@@ -30,6 +32,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.0",
+    "@types/opossum": "^8.1.9",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }
