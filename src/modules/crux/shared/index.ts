@@ -1,2 +1,3 @@
-// CRUX shared exports — types, errors, constants
-// import all shared utilities from here, never from individual files
+// CRUX shared exports
+export * from './types';
+// export * from './errors'; // uncomment after Prompt 5
