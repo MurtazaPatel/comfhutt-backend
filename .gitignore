@@ -19,10 +19,12 @@ dist/
 .DS_Store
 Thumbs.db
 
-# GCP Service Account Keys (NEVER commit these)
+# GCP service account keys — never commit
 github-actions-key.json
 *.json.key
 serviceaccount*.json
+*-key.json
+*service-account*.json
 
 # Logs
 *.log
