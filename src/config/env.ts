@@ -26,6 +26,12 @@ interface EnvConfig {
   INTERNAL_API_SECRET: string;
   /** HTTP listen port */
   PORT: number;
+  /** Google AI Studio API key — powers CRUX Gemini agents */
+  GEMINI_API_KEY: string;
+  /** Google Cloud Maps + Geocoding API key */
+  GOOGLE_MAPS_API_KEY: string;
+  /** CRUX scoring engine version — stamped on every score */
+  CRUX_VERSION: string;
 }
 
 function requireEnv(key: string): string {
@@ -46,4 +52,7 @@ export const env: EnvConfig = {
   APP_ENV: requireEnv("APP_ENV"),
   INTERNAL_API_SECRET: requireEnv("INTERNAL_API_SECRET"),
   PORT: parseInt(process.env.PORT || "8080", 10),
+  GEMINI_API_KEY: requireEnv("GEMINI_API_KEY"),
+  GOOGLE_MAPS_API_KEY: requireEnv("GOOGLE_MAPS_API_KEY"),
+  CRUX_VERSION: process.env.CRUX_VERSION || "0.1.0",
 };
