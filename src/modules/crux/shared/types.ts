@@ -17,7 +17,7 @@ export type PropertyType =
   | 'commercial_retail'
   | 'plot';
 
-export type AgentType = 'fetcher' | 'scorer' | 'lens';
+export type AgentType = 'fetcher' | 'scorer' | 'report' | 'lens';
 
 // ─── Property ────────────────────────────────────────────────────────────────
 
@@ -165,6 +165,65 @@ export interface ComputeScoreInput {
   user_inputs?: Record<string, string>; // optional user-provided clarifications
 }
 
+// ─── CRUX Report ─────────────────────────────────────────────────────────────
+
+export interface CruxReport {
+  id: string;
+  property_id: string;
+  score_id: string;
+  intent_profile: IntentProfile;
+  // Narrative sections — Gemini-generated, never raw weights
+  summary: string;                 // 2-3 sentence plain-language verdict
+  strengths: string[];             // top 3 positives, evidence-backed
+  risks: string[];                 // top 3 risks, evidence-backed
+  location_narrative: string;      // what the location data actually means
+  developer_narrative: string;     // developer track record in plain language
+  legal_narrative: string;         // legal standing summary
+  market_narrative: string;        // market context and pricing
+  disclaimer: string;              // SEBI-mandated, always present, never omitted
+  generated_at: string;
+  crux_version: string;
+}
+
+export interface GenerateReportInput {
+  score: CruxScore;
+  property: PropertyProfile;
+  fetcher_output: AggregatedFetcherOutput;
+  intent_profile: IntentProfile;
+}
+
+// ─── CRUX Card ────────────────────────────────────────────────────────────────
+
+export interface CruxCardData {
+  property: Pick<PropertyProfile, 'id' | 'address_normalized' | 'city' | 'state' | 'property_type'>;
+  score_composite: number;
+  score_breakdown: ScoreBreakdown;
+  confidence_score: number;
+  intent_profile: IntentProfile;   // personalized for signed-in user
+  data_sources_count: number;
+  crux_version: string;
+  generated_at: string;
+  // SEBI disclaimer — always present on card
+  disclaimer: string;
+}
+
+export interface CruxCard {
+  id: string;
+  property_id: string;
+  user_id: string | null;          // null = anonymous
+  share_token: string;             // crux.comfhutt.com/card/[share_token]
+  card_data: CruxCardData;
+  created_at: string;
+  expires_at: string;              // 90 days
+}
+
+export interface CreateCardInput {
+  property_id: string;
+  score: CruxScore;
+  property: PropertyProfile;
+  user_id?: string;                // if signed in → personalized intent profile
+}
+
 // ─── CRUX Watch ───────────────────────────────────────────────────────────────
 
 export interface WatchCredits {
@@ -215,8 +274,8 @@ export interface SseChunk {
 }
 
 export interface LensModuleResult {
-  type: 'score';
-  data: CruxScore;
+  type: 'score' | 'report';
+  data: CruxScore | CruxReport;
 }
 
 // ─── User Dashboard ───────────────────────────────────────────────────────────
