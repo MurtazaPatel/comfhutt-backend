@@ -1,0 +1,16 @@
+✅ PRE-PROMPT 10 PASSED
+
+Canonical test property:
+  property_id:      ac86df83-6931-416d-83d0-da578f61e3e0
+  address:          Koregaon Park, Pune, Maharashtra 411001
+  score_composite:  61
+  confidence_score: 0.5
+  intent_profile:   balanced
+
+Lens tables verified: crux_lens_sessions ✅ crux_lens_messages ✅
+
+TypeScript: 0 errors
+Git status: clean (migration files committed)
+Last commit: 3bfb085 — fix(db): add unique constraint on crux_scores(property_id, intent_profile)
+
+READY FOR PROMPT 10.
