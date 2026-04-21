@@ -1,0 +1,334 @@
+import { Router, Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
+import { supabase } from '../lib/db';
+import { ingestProperty } from '../modules/crux/ingestion';
+import { AppError, isAppError } from '../modules/crux/shared/errors';
+import type { IntentProfile, LifecycleStage, MacroCycle } from '../modules/crux/shared/types';
+import { getOrComputeScore, forceRecomputeScore } from '../modules/crux/scoring';
+import { streamLensMessage } from '../modules/crux/agents/lens.agent';
+import { createSession, getSession, getMessageHistory } from '../modules/crux/lens/lens.service';
+
+const router = Router();
+
+// ── Health ──────────────────────────────────────────────────────────────────
+// Fully implemented — returns version + timestamp
+router.get('/crux/health', (_req: Request, res: Response): void => {
+  console.info('CRUX GET /crux/health hit');
+  res.status(200).json({
+    success: true,
+    version: process.env.CRUX_VERSION ?? 'dev',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ── Ingestion ───────────────────────────────────────────────────────────────
+const IngestSchema = z.object({ address: z.string().min(10) });
+
+router.post('/crux/property', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  console.info('CRUX POST /crux/property hit');
+  const parsed = IngestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      success: false,
+      error: 'VALIDATION_ERROR',
+      message: 'Address must be at least 10 characters',
+      details: parsed.error.flatten(),
+    });
+    return;
+  }
+  try {
+    const profile = await ingestProperty(parsed.data.address);
+    res.status(200).json({ success: true, data: profile });
+  } catch (err) {
+    if (isAppError(err)) {
+      res.status(err.statusCode).json({ success: false, error: err.code, message: err.message });
+      return;
+    }
+    next(err);
+  }
+});
+
+router.get('/crux/property/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  console.info('CRUX GET /crux/property/:id hit');
+  try {
+    const { data, error } = await supabase
+      .from('crux_properties')
+      .select('*')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (error) throw new AppError(500, 'DB_READ_FAILED', error.message);
+    if (!data) {
+      res.status(404).json({ success: false, error: 'NOT_FOUND', message: 'Property not found' });
+      return;
+    }
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (isAppError(err)) {
+      res.status(err.statusCode).json({ success: false, error: err.code, message: err.message });
+      return;
+    }
+    next(err);
+  }
+});
+
+// ── Scoring ─────────────────────────────────────────────────────────────────
+router.post('/crux/score', (_req: Request, res: Response): void => {
+  console.info('CRUX POST /crux/score hit');
+  res.status(501).json({
+    success: false,
+    error: 'NOT_IMPLEMENTED',
+    message: 'Scoring engine not yet implemented',
+    route: 'POST /api/crux/score',
+  });
+});
+
+const VALID_INTENTS: IntentProfile[] = ['yield', 'appreciation', 'balanced'];
+const VALID_LIFECYCLES: LifecycleStage[] = ['near_completion', 'delivered'];
+const VALID_CYCLES: MacroCycle[] = ['growth', 'correction'];
+
+router.get('/crux/score/:property_id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  console.info('CRUX GET /crux/score/:property_id hit');
+  const rawId = req.params.property_id;
+  const property_id = Array.isArray(rawId) ? (rawId[0] ?? '') : rawId;
+  const intent = typeof req.query.intent === 'string' ? req.query.intent : 'balanced';
+  const lifecycle = typeof req.query.lifecycle === 'string' ? req.query.lifecycle : 'delivered';
+  const macro_cycle = typeof req.query.macro_cycle === 'string' ? req.query.macro_cycle : 'growth';
+
+  if (!VALID_INTENTS.includes(intent as IntentProfile)) {
+    res.status(400).json({ success: false, error: 'VALIDATION_ERROR', message: `intent must be one of: ${VALID_INTENTS.join(', ')}` });
+    return;
+  }
+  if (!VALID_LIFECYCLES.includes(lifecycle as LifecycleStage)) {
+    res.status(400).json({ success: false, error: 'VALIDATION_ERROR', message: `lifecycle must be one of: ${VALID_LIFECYCLES.join(', ')}` });
+    return;
+  }
+  if (!VALID_CYCLES.includes(macro_cycle as MacroCycle)) {
+    res.status(400).json({ success: false, error: 'VALIDATION_ERROR', message: `macro_cycle must be one of: ${VALID_CYCLES.join(', ')}` });
+    return;
+  }
+
+  try {
+    const score = await getOrComputeScore(
+      property_id,
+      intent as IntentProfile,
+      lifecycle as LifecycleStage,
+      macro_cycle as MacroCycle,
+    );
+    res.status(200).json({ success: true, data: score });
+  } catch (err) {
+    if (isAppError(err)) {
+      res.status(err.statusCode).json({ success: false, error: err.code, message: err.message });
+      return;
+    }
+    next(err);
+  }
+});
+
+router.post('/crux/score/:property_id/compute', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  console.info('CRUX POST /crux/score/:property_id/compute hit');
+  const rawId = req.params.property_id;
+  const property_id = Array.isArray(rawId) ? (rawId[0] ?? '') : rawId;
+  const intent = typeof req.query.intent === 'string' ? req.query.intent : 'balanced';
+  const lifecycle = typeof req.query.lifecycle === 'string' ? req.query.lifecycle : 'delivered';
+  const macro_cycle = typeof req.query.macro_cycle === 'string' ? req.query.macro_cycle : 'growth';
+
+  if (!VALID_INTENTS.includes(intent as IntentProfile)) {
+    res.status(400).json({ success: false, error: 'VALIDATION_ERROR', message: `intent must be one of: ${VALID_INTENTS.join(', ')}` });
+    return;
+  }
+  if (!VALID_LIFECYCLES.includes(lifecycle as LifecycleStage)) {
+    res.status(400).json({ success: false, error: 'VALIDATION_ERROR', message: `lifecycle must be one of: ${VALID_LIFECYCLES.join(', ')}` });
+    return;
+  }
+  if (!VALID_CYCLES.includes(macro_cycle as MacroCycle)) {
+    res.status(400).json({ success: false, error: 'VALIDATION_ERROR', message: `macro_cycle must be one of: ${VALID_CYCLES.join(', ')}` });
+    return;
+  }
+
+  try {
+    const score = await forceRecomputeScore(
+      property_id,
+      intent as IntentProfile,
+      lifecycle as LifecycleStage,
+      macro_cycle as MacroCycle,
+    );
+    res.status(200).json({ success: true, data: score });
+  } catch (err) {
+    if (isAppError(err)) {
+      res.status(err.statusCode).json({ success: false, error: err.code, message: err.message });
+      return;
+    }
+    next(err);
+  }
+});
+
+// ── Lens (chat) ─────────────────────────────────────────────────────────────
+router.post('/crux/lens/session', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  console.info('CRUX POST /crux/lens/session hit');
+  try {
+    const { property_id } = req.body as { property_id?: string };
+
+    if (!property_id || typeof property_id !== 'string') {
+      throw new AppError(400, 'VALIDATION_ERROR', 'property_id is required');
+    }
+
+    const { data: property, error } = await supabase
+      .from('crux_properties')
+      .select('id, address_raw, city')
+      .eq('id', property_id)
+      .maybeSingle();
+
+    if (error || !property) {
+      throw new AppError(404, 'PROPERTY_NOT_FOUND', 'Property not found. Ingest it first via POST /crux/property.');
+    }
+
+    const userId = (req as Request & { user?: { id?: string } }).user?.id;
+    const session = await createSession(property_id, userId);
+
+    res.json({
+      success: true,
+      data: {
+        session_id: session.id,
+        property_id: session.property_id,
+        expires_at: session.expires_at,
+        created_at: session.created_at,
+      },
+    });
+  } catch (err) {
+    if (isAppError(err)) {
+      res.status(err.statusCode).json({ success: false, error: err.code, message: err.message });
+      return;
+    }
+    next(err);
+  }
+});
+
+router.post('/crux/lens/:session_id/message', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  console.info('CRUX POST /crux/lens/:session_id/message hit');
+  try {
+    const rawId = req.params.session_id;
+    const session_id = Array.isArray(rawId) ? (rawId[0] ?? '') : rawId;
+    const { message } = req.body as { message?: string };
+
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'message is required and cannot be empty');
+    }
+
+    if (message.length > 2000) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Message too long. Maximum 2000 characters.');
+    }
+
+    await streamLensMessage(session_id, message.trim(), res);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/crux/lens/:session_id/history', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  console.info('CRUX GET /crux/lens/:session_id/history hit');
+  try {
+    const rawId = req.params.session_id;
+    const session_id = Array.isArray(rawId) ? (rawId[0] ?? '') : rawId;
+
+    await getSession(session_id);
+
+    const messages = await getMessageHistory(session_id);
+
+    res.json({
+      success: true,
+      data: {
+        session_id,
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at,
+        })),
+        count: messages.length,
+      },
+    });
+  } catch (err) {
+    if (isAppError(err)) {
+      res.status(err.statusCode).json({ success: false, error: err.code, message: err.message });
+      return;
+    }
+    next(err);
+  }
+});
+
+// ── Watch ───────────────────────────────────────────────────────────────────
+router.get('/crux/watch/credits', (_req: Request, res: Response): void => {
+  console.info('CRUX GET /crux/watch/credits hit');
+  res.status(501).json({
+    success: false,
+    error: 'NOT_IMPLEMENTED',
+    message: 'Watch credits fetch not yet implemented',
+    route: 'GET /api/crux/watch/credits',
+  });
+});
+
+router.post('/crux/watch/register', (_req: Request, res: Response): void => {
+  console.info('CRUX POST /crux/watch/register hit');
+  res.status(501).json({
+    success: false,
+    error: 'NOT_IMPLEMENTED',
+    message: 'Watch registration not yet implemented',
+    route: 'POST /api/crux/watch/register',
+  });
+});
+
+// ── Cast ────────────────────────────────────────────────────────────────────
+router.get('/crux/cast/:property_id', (_req: Request, res: Response): void => {
+  console.info('CRUX GET /crux/cast/:property_id hit');
+  res.status(501).json({
+    success: false,
+    error: 'NOT_IMPLEMENTED',
+    message: 'CRUX Cast not yet implemented',
+    route: 'GET /api/crux/cast/:property_id',
+  });
+});
+
+// ── Yield ───────────────────────────────────────────────────────────────────
+router.get('/crux/yield/:property_id', (_req: Request, res: Response): void => {
+  console.info('CRUX GET /crux/yield/:property_id hit');
+  res.status(501).json({
+    success: false,
+    error: 'NOT_IMPLEMENTED',
+    message: 'CRUX Yield not yet implemented',
+    route: 'GET /api/crux/yield/:property_id',
+  });
+});
+
+// ── Card ────────────────────────────────────────────────────────────────────
+router.post('/crux/card/:property_id', (_req: Request, res: Response): void => {
+  console.info('CRUX POST /crux/card/:property_id hit');
+  res.status(501).json({
+    success: false,
+    error: 'NOT_IMPLEMENTED',
+    message: 'Card generation not yet implemented',
+    route: 'POST /api/crux/card/:property_id',
+  });
+});
+
+// Public endpoint — no auth required ever
+router.get('/crux/card/share/:share_token', (_req: Request, res: Response): void => {
+  console.info('CRUX GET /crux/card/share/:share_token hit');
+  res.status(501).json({
+    success: false,
+    error: 'NOT_IMPLEMENTED',
+    message: 'Card share fetch not yet implemented',
+    route: 'GET /api/crux/card/share/:share_token',
+  });
+});
+
+// ── Dashboard ───────────────────────────────────────────────────────────────
+router.get('/crux/dashboard', (_req: Request, res: Response): void => {
+  console.info('CRUX GET /crux/dashboard hit');
+  res.status(501).json({
+    success: false,
+    error: 'NOT_IMPLEMENTED',
+    message: 'User dashboard not yet implemented',
+    route: 'GET /api/crux/dashboard',
+  });
+});
+
+export default router;
