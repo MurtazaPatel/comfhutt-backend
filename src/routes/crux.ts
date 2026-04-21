@@ -10,6 +10,7 @@ import { generateReport } from '../modules/crux/agents/report.agent';
 import { createSession, getSession, getMessageHistory } from '../modules/crux/lens/lens.service';
 import { generateCard } from '../modules/crux/card/card.generator';
 import { getCardByToken } from '../modules/crux/card/card.service';
+import { getOrSeedCredits, registerWatch } from '../modules/crux/watch/watch.service';
 
 const router = Router();
 
@@ -259,24 +260,51 @@ router.get('/crux/lens/:session_id/history', async (req: Request, res: Response,
 });
 
 // ── Watch ───────────────────────────────────────────────────────────────────
-router.get('/crux/watch/credits', (_req: Request, res: Response): void => {
-  console.info('CRUX GET /crux/watch/credits hit');
-  res.status(501).json({
-    success: false,
-    error: 'NOT_IMPLEMENTED',
-    message: 'Watch credits fetch not yet implemented',
-    route: 'GET /api/crux/watch/credits',
-  });
+router.get('/crux/watch/credits', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id
+    if (!userId) {
+      throw new AppError(401, 'UNAUTHORIZED', 'Sign in to view your Watch credits.')
+    }
+    const credits = await getOrSeedCredits(userId)
+    res.json({
+      success: true,
+      data: {
+        credits_remaining: credits.credits_remaining,
+        credits_total: credits.credits_total,
+        credits_used: credits.credits_total - credits.credits_remaining,
+      },
+    })
+  } catch (err) {
+    next(err)
+  }
 });
 
-router.post('/crux/watch/register', (_req: Request, res: Response): void => {
-  console.info('CRUX POST /crux/watch/register hit');
-  res.status(501).json({
-    success: false,
-    error: 'NOT_IMPLEMENTED',
-    message: 'Watch registration not yet implemented',
-    route: 'POST /api/crux/watch/register',
-  });
+router.post('/crux/watch/:property_id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { property_id } = req.params
+    const userId = (req as any).user?.id
+    if (!userId) {
+      throw new AppError(401, 'UNAUTHORIZED', 'Watch requires an account. Sign in to use Watch credits.')
+    }
+    const result = await registerWatch(userId, property_id as string)
+    res.json({
+      success: true,
+      data: {
+        watch_id: result.watch_id,
+        property_id,
+        credits_remaining: result.credits_remaining,
+        already_watching: result.already_watching,
+        message: result.already_watching
+          ? 'Already watching this property.'
+          : `Watch registered. ${result.credits_remaining} credit${result.credits_remaining === 1 ? '' : 's'} remaining.`,
+        monitoring_status: 'pending_activation',
+        monitoring_note: 'Score-change alerts are coming soon. Your watch is registered.',
+      },
+    })
+  } catch (err) {
+    next(err)
+  }
 });
 
 // ── Cast ────────────────────────────────────────────────────────────────────
