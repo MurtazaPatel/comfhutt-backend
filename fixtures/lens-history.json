@@ -1,0 +1,29 @@
+{
+  "success": true,
+  "data": {
+    "session_id": "f3b0f071-415e-49f4-8cf0-b203428ea548",
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is the CRUX Score for this property and what are its biggest risks?",
+        "created_at": "2026-04-21T20:10:00.000Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Based on the CRUX analysis for Koregaon Park, Pune, this property scores 61 out of 100 on the CRUX credibility scale with a confidence level of 50%.\n\nThe strongest signals are in **Legal & Title Integrity** (score: 60) — eCourts shows no active litigation and MCA21 confirms the developer entity is active.\n\nThe weakest category is **Developer Reliability** (score: 50) — partial data from MCA21 means I couldn't fully verify the delivery track record.\n\n⚠️ *This analysis is for property research only. Not investment advice. CRUX is not a SEBI-registered Investment Adviser.*",
+        "created_at": "2026-04-21T20:10:05.000Z"
+      },
+      {
+        "role": "user",
+        "content": "What is the fair market value of this property?",
+        "created_at": "2026-04-21T20:11:00.000Z"
+      },
+      {
+        "role": "assistant",
+        "content": "CRUX Cast (our AI valuation engine) is launching very soon. In the meantime, NHB RESIDEX data for Pune's 411001 PIN suggests properties in Koregaon Park typically transact in the ₹8,000–₹14,000 per sq ft range depending on floor, age, and amenities.\n\n⚠️ *Not investment advice. Consult a registered advisor.*",
+        "created_at": "2026-04-21T20:11:08.000Z"
+      }
+    ],
+    "count": 4
+  }
+}

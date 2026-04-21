@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "data": {
+    "id": "1c6fdeed-a5e9-40f4-8c1c-7091a3aba756",
+    "created_at": "2026-04-21T14:50:36.547+00:00",
+    "property_id": "ac86df83-6931-416d-83d0-da578f61e3e0",
+    "intent_profile": "balanced",
+    "lifecycle_stage": "delivered",
+    "macro_cycle": "growth",
+    "score_composite": 61,
+    "score_breakdown": {
+      "risk_composite": 50,
+      "legal_compliance": 60,
+      "market_valuation": 80,
+      "structural_physical": 50,
+      "developer_reliability": 50,
+      "location_intelligence": 66
+    },
+    "data_sources_used": ["google_maps", "nhb_residex", "cpwd"],
+    "confidence_score": 0.5,
+    "crux_version": "0.1.0",
+    "methodology_hash": "266dc2ffe0224dece8c11a48955e482e2515422375306d157d1112d9c6d2a0ca",
+    "ttl_expires_at": "2026-04-22T14:50:36.547+00:00",
+    "degraded": false,
+    "clarifications_requested": []
+  }
+}

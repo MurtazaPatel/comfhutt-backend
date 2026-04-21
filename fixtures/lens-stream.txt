@@ -1,0 +1,25 @@
+data: {"delta":"Based on the CRUX analysis for Koregaon Park","done":false,"module_result":null}
+
+data: {"delta":", Pune, this property scores","done":false,"module_result":null}
+
+data: {"delta":" 61 out of 100 on the CRUX credibility scale","done":false,"module_result":null}
+
+data: {"delta":" with a confidence level of 50%.","done":false,"module_result":null}
+
+data: {"delta":"\n\nThe strongest signals are in **Legal & Title Integrity**","done":false,"module_result":null}
+
+data: {"delta":" (score: 60) — eCourts shows no active litigation","done":false,"module_result":null}
+
+data: {"delta":" and MCA21 confirms the developer entity is active.","done":false,"module_result":null}
+
+data: {"delta":"\n\nThe weakest category is **Developer Reliability** (score: 50)","done":false,"module_result":null}
+
+data: {"delta":" — partial data from MCA21 means I couldn't fully verify","done":false,"module_result":null}
+
+data: {"delta":" the delivery track record. I'd recommend checking RERA directly.","done":false,"module_result":null}
+
+data: {"delta":"\n\n⚠️ *This analysis is for property research only.","done":false,"module_result":null}
+
+data: {"delta":" Not investment advice. CRUX is not a SEBI-registered Investment Adviser.*","done":false,"module_result":null}
+
+data: {"delta":"","done":true,"module_result":null}

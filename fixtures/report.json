@@ -1,0 +1,33 @@
+{
+  "success": true,
+  "data": {
+    "id": "e7f1a2b3-c4d5-4e6f-a7b8-c9d0e1f2a3b4",
+    "property_id": "ac86df83-6931-416d-83d0-da578f61e3e0",
+    "score_id": "1c6fdeed-a5e9-40f4-8c1c-7091a3aba756",
+    "intent_profile": "balanced",
+    "summary": "Koregaon Park presents a moderate credibility profile with established location credentials offset by limited developer-specific data and average market valuation signals. The area's premium residential status is reflected in connectivity and amenity scores, though air quality data from CPCB indicates room for improvement.",
+    "category_narratives": {
+      "legal_title": "eCourts data shows no pending litigation directly associated with this property survey area. MCA21 records indicate the associated developer entity maintains active filing status, though detailed compliance history was partially unavailable at the time of analysis.",
+      "location_quality": "Located in a well-connected urban node with high POI density per Google Maps data. CPCB AQI readings for PIN 411001 show moderate air quality — typically in the 'Satisfactory' to 'Moderate' range — which marginally reduces the location score.",
+      "developer_reliability": "MCA21 data provided partial signals on developer financial health. Full NPA and delivery track record verification was limited by data availability. Confidence in this category is moderate — users are encouraged to independently verify RERA registration status.",
+      "market_valuation": "NHB RESIDEX data for the Pune micro-market indicates stable price appreciation in recent quarters. CPWD construction cost indices suggest the property is priced within a reasonable range for the locality, though exact listing price comparison was not available for this analysis.",
+      "demand_signals": "Google Maps popularity signals suggest consistent footfall in the immediate vicinity. Rental demand indicators for Koregaon Park are positive given its proximity to commercial hubs, though precise rental transaction data was not available from live sources at the time of scoring."
+    },
+    "risk_flags": [
+      "Developer reliability data was partially unavailable — independently verify RERA registration and past project delivery record before committing.",
+      "Air quality (CPCB AQI) for this PIN code falls in the Moderate range on high-pollution days — relevant for long-term residential comfort.",
+      "Confidence score is 0.5 — several data sources returned partial data. This score should be treated as indicative, not definitive.",
+      "No exact listing price was available for direct market comparison — verify current asking price against NHB RESIDEX benchmarks independently."
+    ],
+    "positive_signals": [
+      "eCourts records show no active litigation flagged for this property area — a strong legal title signal.",
+      "Koregaon Park consistently ranks among Pune's highest-demand residential micro-markets per Google Maps POI and connectivity data.",
+      "NHB RESIDEX Pune index shows stable appreciation — no correction signals detected in recent quarterly data.",
+      "High amenity density score — proximity to commercial, healthcare, and education POIs confirmed via Google Maps."
+    ],
+    "sebi_disclaimer": "This report is generated for property research purposes only. It does not constitute financial, investment, or legal advice. CRUX is not a SEBI-registered Investment Adviser. Past performance and data-based analysis do not guarantee future outcomes. Consult a registered financial advisor before making any investment decision.",
+    "crux_version": "0.1.0",
+    "generated_at": "2026-04-21T14:52:00.000Z",
+    "ttl_expires_at": "2026-04-22T14:52:00.000Z"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "property_not_found": {
+    "error": {
+      "code": "PROPERTY_NOT_FOUND",
+      "message": "Property not found.",
+      "status": 404
+    }
+  },
+  "unauthorized": {
+    "error": {
+      "code": "UNAUTHORIZED",
+      "message": "Sign in to view your Watch credits.",
+      "status": 401
+    }
+  },
+  "watch_credits_exhausted": {
+    "error": {
+      "code": "WATCH_CREDITS_EXHAUSTED",
+      "message": "No Watch credits remaining. Watch credits will be replenished in a future update.",
+      "status": 429
+    }
+  },
+  "session_expired": {
+    "error": {
+      "code": "SESSION_EXPIRED",
+      "message": "This session has expired. Please start a new conversation.",
+      "status": 410
+    }
+  },
+  "rate_limit_exceeded": {
+    "error": {
+      "code": "RATE_LIMIT_EXCEEDED",
+      "message": "Too many requests. Please slow down.",
+      "status": 429
+    }
+  },
+  "validation_error": {
+    "error": {
+      "code": "VALIDATION_ERROR",
+      "message": "Invalid intent: unknown",
+      "status": 400
+    }
+  }
+}

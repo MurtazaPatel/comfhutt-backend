@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "data": {
+    "card_id": "d2acdf4f-0765-4b5a-a21d-786367ca6b13",
+    "share_token": "WB5zh4cIXbiB",
+    "share_url": "https://crux.comfhutt.com/card/WB5zh4cIXbiB",
+    "expires_at": "2026-07-20T20:08:35.126+00:00",
+    "card_data": {
+      "address": "Koregaon Park, Pune, Maharashtra 411001, India",
+      "city": "Pune",
+      "state": "Maharashtra",
+      "property_type": null,
+      "score_composite": 61,
+      "score_breakdown": {
+        "risk_composite": 50,
+        "legal_compliance": 60,
+        "market_valuation": 80,
+        "structural_physical": 50,
+        "developer_reliability": 50,
+        "location_intelligence": 66
+      },
+      "confidence_score": 0.5,
+      "intent_profile": "balanced",
+      "data_sources_used": ["google_maps", "nhb_residex", "cpwd"],
+      "crux_version": "0.1.0",
+      "scored_at": "2026-04-21T14:50:36.547+00:00",
+      "summary": null,
+      "risk_flags": [],
+      "positive_signals": [],
+      "sebi_disclaimer": "Research tool only. Not investment advice. CRUX Score is a property credibility indicator, not a buy/sell recommendation. Consult a registered financial advisor before making any investment decision.",
+      "generated_at": "2026-04-21T20:08:35.126Z",
+      "deep_link": "https://crux.comfhutt.com/card/WB5zh4cIXbiB"
+    }
+  }
+}

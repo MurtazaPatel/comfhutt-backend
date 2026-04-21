@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "data": {
+    "id": "ac86df83-6931-416d-83d0-da578f61e3e0",
+    "created_at": "2026-04-21T14:42:23.637676+00:00",
+    "updated_at": "2026-04-21T14:42:23.637676+00:00",
+    "address_raw": "Koregaon Park, Pune, Maharashtra 411001",
+    "address_normalized": "Koregaon Park, Pune, Maharashtra 411001, India",
+    "geocode_lat": 18.5362084,
+    "geocode_lng": 73.8939748,
+    "pin_code": "411001",
+    "city": "Pune",
+    "state": "Maharashtra",
+    "property_type": null,
+    "approx_size_sqft": null
+  }
+}

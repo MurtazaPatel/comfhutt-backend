@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "data": {
+    "watch_id": "b2c3d479-58cc-4372-a567-0e02b2c3d479",
+    "property_id": "ac86df83-6931-416d-83d0-da578f61e3e0",
+    "credits_remaining": 2,
+    "already_watching": false,
+    "message": "Watch registered. 2 credits remaining.",
+    "monitoring_status": "pending_activation",
+    "monitoring_note": "Score-change alerts are coming soon. Your watch is registered."
+  }
+}

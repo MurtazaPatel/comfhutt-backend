@@ -1,0 +1,19 @@
+data: {"delta":"Let me check the valuation data for this property...","done":false,"module_result":null}
+
+data: {"delta":"","done":false,"module_result":{"type":"cast","data":{"status":"coming_soon","message":"CRUX Cast is launching soon. Score and Lens are live now."}}}
+
+data: {"delta":"CRUX Cast (our AI valuation engine) is launching very soon.","done":false,"module_result":null}
+
+data: {"delta":" In the meantime, NHB RESIDEX data for Pune's 411001 PIN","done":false,"module_result":null}
+
+data: {"delta":" suggests properties in Koregaon Park typically transact","done":false,"module_result":null}
+
+data: {"delta":" in the ₹8,000–₹14,000 per sq ft range depending on floor,","done":false,"module_result":null}
+
+data: {"delta":" age, and amenities — though I cannot give you a precise","done":false,"module_result":null}
+
+data: {"delta":" valuation without the full Cast engine live.","done":false,"module_result":null}
+
+data: {"delta":"\n\n⚠️ *Not investment advice. Consult a registered advisor.*","done":false,"module_result":null}
+
+data: {"delta":"","done":true,"module_result":null}
