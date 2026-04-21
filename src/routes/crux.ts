@@ -5,8 +5,11 @@ import { ingestProperty } from '../modules/crux/ingestion';
 import { AppError, isAppError } from '../modules/crux/shared/errors';
 import type { IntentProfile, LifecycleStage, MacroCycle } from '../modules/crux/shared/types';
 import { getOrComputeScore, forceRecomputeScore } from '../modules/crux/scoring';
-import { streamLensMessage } from '../modules/crux/agents/lens.agent';
+import { streamLensMessage } from '../modules/crux/agents/lens.agent'
+import { generateReport } from '../modules/crux/agents/report.agent';
 import { createSession, getSession, getMessageHistory } from '../modules/crux/lens/lens.service';
+import { generateCard } from '../modules/crux/card/card.generator';
+import { getCardByToken } from '../modules/crux/card/card.service';
 
 const router = Router();
 
@@ -299,25 +302,53 @@ router.get('/crux/yield/:property_id', (_req: Request, res: Response): void => {
 });
 
 // ── Card ────────────────────────────────────────────────────────────────────
-router.post('/crux/card/:property_id', (_req: Request, res: Response): void => {
-  console.info('CRUX POST /crux/card/:property_id hit');
-  res.status(501).json({
-    success: false,
-    error: 'NOT_IMPLEMENTED',
-    message: 'Card generation not yet implemented',
-    route: 'POST /api/crux/card/:property_id',
-  });
+router.post('/crux/card/:property_id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const rawId = req.params.property_id;
+  const property_id = Array.isArray(rawId) ? (rawId[0] ?? '') : rawId;
+  const rawIntent = req.query.intent;
+  const intent = (typeof rawIntent === 'string' ? rawIntent : undefined) || 'balanced';
+  const userId = (req as any).user?.id ?? null;
+  try {
+    const validIntents = ['yield', 'appreciation', 'balanced'];
+    if (!validIntents.includes(intent)) {
+      throw new AppError(400, 'VALIDATION_ERROR', `Invalid intent: ${intent}`);
+    }
+    const card = await generateCard(property_id, intent, userId);
+    res.json({
+      success: true,
+      data: {
+        card_id: card.id,
+        share_token: card.share_token,
+        share_url: card.card_data.deep_link,
+        expires_at: card.expires_at,
+        card_data: card.card_data,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // Public endpoint — no auth required ever
-router.get('/crux/card/share/:share_token', (_req: Request, res: Response): void => {
-  console.info('CRUX GET /crux/card/share/:share_token hit');
-  res.status(501).json({
-    success: false,
-    error: 'NOT_IMPLEMENTED',
-    message: 'Card share fetch not yet implemented',
-    route: 'GET /api/crux/card/share/:share_token',
-  });
+router.get('/crux/card/share/:share_token', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const rawToken = req.params.share_token;
+    const share_token = Array.isArray(rawToken) ? (rawToken[0] ?? '') : rawToken;
+    const card = await getCardByToken(share_token);
+    res.json({
+      success: true,
+      data: {
+        card_id: card.id,
+        share_token: card.share_token,
+        card_data: card.card_data,
+        view_count: card.view_count,
+        created_at: card.created_at,
+        expires_at: card.expires_at,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ── Dashboard ───────────────────────────────────────────────────────────────
@@ -330,5 +361,24 @@ router.get('/crux/dashboard', (_req: Request, res: Response): void => {
     route: 'GET /api/crux/dashboard',
   });
 });
+
+// ── Report ──────────────────────────────────────────────────────────────────
+router.get('/crux/report/:property_id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const rawId = req.params.property_id
+    const property_id = Array.isArray(rawId) ? (rawId[0] ?? '') : rawId
+    const intent = typeof req.query.intent === 'string' ? req.query.intent : 'balanced'
+
+    const validIntents = ['yield', 'appreciation', 'balanced']
+    if (!validIntents.includes(intent)) {
+      throw new AppError(400, 'VALIDATION_ERROR', `Invalid intent: ${intent}`)
+    }
+
+    const report = await generateReport(property_id, intent)
+    res.json({ success: true, data: report })
+  } catch (err) {
+    next(err)
+  }
+})
 
 export default router;
