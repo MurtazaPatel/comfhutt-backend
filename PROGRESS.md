@@ -37,3 +37,20 @@ Full auth backend is now live:
   - All tool routes protected — /card/:token and /health intentionally open
   - Watch credit guard with atomic RPC decrement
   - creditsRemaining in watch response
+
+## Prompt 19 — Search History Persistence
+
+- [x] TASK-19-A — feat(db): add crux_searches table for search history
+- [x] TASK-19-B — feat(search): add SearchHistoryService with persist, fetch, cache-check
+- [x] TASK-19-C — feat(score): wire search history persist and 24h cache check
+- [x] TASK-19-D — feat(search): add GET /searches/recent endpoint
+- [x] TASK-19-E — docs: mark Prompt 19 complete in PROGRESS.md
+
+## Search History + 24h Cache — Complete
+
+Search history backend is now live:
+  - crux_searches table with indexed lookups (user, property, share_token)
+  - Atomic persistence on every score run
+  - 24-hour cache check to avoid recomputing same property
+  - GET /api/crux/searches/recent returns last 10 user searches
+  - JSONB snapshot storage for fast history rendering (no re-scoring needed)
