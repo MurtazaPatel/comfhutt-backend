@@ -36,6 +36,8 @@ interface EnvConfig {
   CLERK_SECRET_KEY: string;
   /** Clerk publishable key (safe for client reference) */
   CLERK_PUBLISHABLE_KEY: string;
+  /** Clerk webhook signing secret for Svix verification */
+  CLERK_WEBHOOK_SECRET: string;
 }
 
 function requireEnv(key: string): string {
@@ -61,6 +63,7 @@ export const env: EnvConfig = {
   CRUX_VERSION: process.env.CRUX_VERSION || "0.1.0",
   CLERK_SECRET_KEY: requireEnv("CLERK_SECRET_KEY"),
   CLERK_PUBLISHABLE_KEY: requireEnv("CLERK_PUBLISHABLE_KEY"),
+  CLERK_WEBHOOK_SECRET: requireEnv("CLERK_WEBHOOK_SECRET"),
 };
 
 // CRUX Data Source URLs (defaults to public government endpoints)
