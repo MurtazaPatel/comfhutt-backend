@@ -9,6 +9,7 @@ import authRouter from "./auth";
 import authEmailHookRouter from "./auth-email-hook";
 import authClerkRouter from "./auth.routes";
 import cruxRouter from "./crux";
+import searchesRouter from "./searches.routes";
 
 const router = Router();
 
@@ -26,6 +27,7 @@ router.use("/api/auth-email-hook", authEmailHookRouter);
 
 // ── CRUX ─────────────────────────────────────────────
 router.use("/api/crux/auth", authClerkRouter);
+router.use("/api/crux/searches", searchesRouter);
 router.use("/api", cruxRouter);
 
 export default router;
