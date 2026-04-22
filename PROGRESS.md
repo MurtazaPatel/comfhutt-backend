@@ -19,7 +19,14 @@
 - [x] TASK-17B-E — feat(auth): requireAuth audit on all tool routes
 - [x] TASK-17B-F — docs: progress update
 
-## Auth Layer — Complete
+## Prompt 18 — Watch Credit Guard
+
+- [x] TASK-18-A — feat(db): atomic watch credit decrement RPC
+- [x] TASK-18-B — feat(auth): watchCreditGuard middleware
+- [x] TASK-18-C — feat(watch): wire guard + creditsRemaining in response
+- [x] TASK-18-D — docs: progress update
+
+## Auth Layer + Watch Credits — Complete
 
 Full auth backend is now live:
   - Clerk session verification on every tool route
@@ -28,3 +35,5 @@ Full auth backend is now live:
   - isNewUser flag for frontend onboarding flow
   - Soft delete on user.deleted
   - All tool routes protected — /card/:token and /health intentionally open
+  - Watch credit guard with atomic RPC decrement
+  - creditsRemaining in watch response
