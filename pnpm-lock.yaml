@@ -11,6 +11,9 @@ importers:
       '@clerk/express':
         specifier: ^2.1.5
         version: 2.1.5(express@4.22.1)
+      '@comfhutt/types':
+        specifier: workspace:*
+        version: link:packages/types
       '@google/generative-ai':
         specifier: ^0.24.1
         version: 0.24.1
