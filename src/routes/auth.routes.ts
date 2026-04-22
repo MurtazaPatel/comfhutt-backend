@@ -5,6 +5,7 @@ import {
   syncUserToSupabase,
   getUserFromSupabase,
 } from "../services/userSync.service";
+import { supabase } from "../lib/db";
 import { AppError } from "../modules/crux/shared/errors";
 import { env } from "../config/env";
 import type { Request, Response, NextFunction } from "express";
@@ -62,6 +63,7 @@ router.get(
         email: primaryEmail,
         phone: primaryPhone,
         displayName,
+        provisionedVia: 'sync',
       });
 
       // Fetch CRUX profile from Supabase
@@ -81,8 +83,39 @@ router.get(
         planTier: profile.plan_tier,
         watchCredits: profile.watch_credits,
         totalSearches: profile.total_searches,
+        isNewUser: !profile.onboarding_completed,
         createdAt: profile.created_at,
       });
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
+/**
+ * PATCH /onboarding-complete
+ * Protected. Called by frontend after user dismisses onboarding banner.
+ * Sets onboarding_completed = true so isNewUser becomes false on next /auth/me.
+ */
+router.patch(
+  "/onboarding-complete",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId } = getAuth(req);
+      if (!userId)
+        throw new AppError(401, "UNAUTHORIZED", "Authentication required.");
+
+      const { error } = await supabase
+        .from("crux_users")
+        .update({ onboarding_completed: true })
+        .eq("clerk_user_id", userId);
+
+      if (error) {
+        throw new AppError(500, "UPDATE_FAILED", "Failed to update onboarding status.");
+      }
+
+      return res.json({ success: true });
     } catch (err) {
       return next(err);
     }
