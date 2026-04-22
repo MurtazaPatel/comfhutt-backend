@@ -1,10 +1,14 @@
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { openAPIBase } from './openapi.base';
-import { paths } from './schemas';
+import { paths, components } from './schemas';
 
 const spec = {
   ...openAPIBase,
+  components: {
+    ...openAPIBase.components,
+    ...components,
+  },
   paths,
 };
 

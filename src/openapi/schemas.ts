@@ -1,3 +1,211 @@
+export const components = {
+  schemas: {
+    ApiError: {
+      type: 'object',
+      required: ['code', 'message', 'statusCode'],
+      properties: {
+        code: { type: 'string' },
+        message: { type: 'string' },
+        statusCode: { type: 'number' },
+        details: { type: 'object' },
+      },
+    },
+    AuthMeResponse: {
+      type: 'object',
+      required: ['user'],
+      properties: {
+        user: { $ref: '#/components/schemas/CruxUser' },
+      },
+    },
+    CruxUser: {
+      type: 'object',
+      required: ['id', 'email', 'isPro', 'watchCredits', 'createdAt', 'updatedAt'],
+      properties: {
+        id: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
+        firstName: { type: 'string' },
+        lastName: { type: 'string' },
+        isPro: { type: 'boolean' },
+        watchCredits: { type: 'number' },
+        createdAt: { type: 'string' },
+        updatedAt: { type: 'string' },
+      },
+    },
+    ScoreRequest: {
+      type: 'object',
+      required: ['propertyAddress', 'city', 'pincode', 'lifecycleStage', 'investorIntent'],
+      properties: {
+        propertyAddress: { type: 'string' },
+        city: { type: 'string' },
+        pincode: { type: 'string' },
+        lifecycleStage: {
+          type: 'string',
+          enum: ['near_completion', 'delivered', 'established', 'mature'],
+        },
+        investorIntent: { type: 'string', enum: ['yield', 'appreciation', 'balanced'] },
+        lat: { type: 'number' },
+        lng: { type: 'number' },
+      },
+    },
+    ParameterScore: {
+      type: 'object',
+      required: ['name', 'score', 'weight', 'source', 'confidence', 'lastUpdated'],
+      properties: {
+        name: { type: 'string' },
+        score: { type: 'number' },
+        weight: { type: 'number' },
+        source: { type: 'string' },
+        confidence: { type: 'number' },
+        lastUpdated: { type: 'string' },
+      },
+    },
+    ScoreCategory: {
+      type: 'object',
+      required: ['name', 'score', 'parameters'],
+      properties: {
+        name: { type: 'string' },
+        score: { type: 'number' },
+        parameters: { type: 'array', items: { $ref: '#/components/schemas/ParameterScore' } },
+      },
+    },
+    ValuationMethod: {
+      type: 'object',
+      required: ['method', 'fairValueMin', 'fairValueMax', 'confidence'],
+      properties: {
+        method: { type: 'string', enum: ['income_capitalization', 'sales_comparable', 'replacement_cost'] },
+        fairValueMin: { type: 'number' },
+        fairValueMax: { type: 'number' },
+        confidence: { type: 'number' },
+      },
+    },
+    MarketValuation: {
+      type: 'object',
+      required: ['weightedFairValueMin', 'weightedFairValueMax', 'methodVarianceFlag', 'methods'],
+      properties: {
+        weightedFairValueMin: { type: 'number' },
+        weightedFairValueMax: { type: 'number' },
+        methodVarianceFlag: { type: 'boolean' },
+        methods: { type: 'array', items: { $ref: '#/components/schemas/ValuationMethod' } },
+        vsListedPricePercent: { type: 'number' },
+      },
+    },
+    CruxScoreResponse: {
+      type: 'object',
+      required: ['scoreId', 'shareToken', 'compositeScore', 'macroMarketCycle', 'categories', 'valuation', 'reportSummary', 'confidenceScore', 'methodologyVersion', 'createdAt'],
+      properties: {
+        scoreId: { type: 'string' },
+        shareToken: { type: 'string' },
+        compositeScore: { type: 'number' },
+        macroMarketCycle: {
+          type: 'string',
+          enum: ['growth', 'consolidation', 'correction', 'recovery'],
+        },
+        categories: { type: 'array', items: { $ref: '#/components/schemas/ScoreCategory' } },
+        valuation: { $ref: '#/components/schemas/MarketValuation' },
+        reportSummary: { type: 'string' },
+        confidenceScore: { type: 'number' },
+        methodologyVersion: { type: 'string' },
+        createdAt: { type: 'string' },
+      },
+    },
+    LensMessage: {
+      type: 'object',
+      required: ['role', 'content', 'timestamp'],
+      properties: {
+        role: { type: 'string', enum: ['user', 'assistant'] },
+        content: { type: 'string' },
+        timestamp: { type: 'string' },
+      },
+    },
+    LensRequest: {
+      type: 'object',
+      required: ['scoreId', 'message', 'history'],
+      properties: {
+        scoreId: { type: 'string' },
+        message: { type: 'string' },
+        history: { type: 'array', items: { $ref: '#/components/schemas/LensMessage' } },
+      },
+    },
+    LensStreamChunk: {
+      type: 'object',
+      required: ['type'],
+      properties: {
+        type: { type: 'string', enum: ['delta', 'done', 'error'] },
+        content: { type: 'string' },
+        error: { type: 'string' },
+      },
+    },
+    WatchCreateRequest: {
+      type: 'object',
+      required: ['propertyAddress', 'city', 'pincode'],
+      properties: {
+        propertyAddress: { type: 'string' },
+        city: { type: 'string' },
+        pincode: { type: 'string' },
+        lat: { type: 'number' },
+        lng: { type: 'number' },
+      },
+    },
+    WatchEntry: {
+      type: 'object',
+      required: ['watchId', 'userId', 'propertyAddress', 'city', 'pincode', 'alertThreshold', 'isActive', 'createdAt'],
+      properties: {
+        watchId: { type: 'string' },
+        userId: { type: 'string' },
+        propertyAddress: { type: 'string' },
+        city: { type: 'string' },
+        pincode: { type: 'string' },
+        lastScoreId: { type: 'string' },
+        lastCompositeScore: { type: 'number' },
+        alertThreshold: { type: 'number' },
+        isActive: { type: 'boolean' },
+        createdAt: { type: 'string' },
+      },
+    },
+    WatchListResponse: {
+      type: 'object',
+      required: ['watches', 'remainingCredits'],
+      properties: {
+        watches: { type: 'array', items: { $ref: '#/components/schemas/WatchEntry' } },
+        remainingCredits: { type: 'number' },
+      },
+    },
+    ReportSection: {
+      type: 'object',
+      required: ['title', 'content'],
+      properties: {
+        title: { type: 'string' },
+        content: { type: 'string' },
+      },
+    },
+    CruxReportResponse: {
+      type: 'object',
+      required: ['reportId', 'scoreId', 'sections', 'generatedAt'],
+      properties: {
+        reportId: { type: 'string' },
+        scoreId: { type: 'string' },
+        sections: { type: 'array', items: { $ref: '#/components/schemas/ReportSection' } },
+        generatedAt: { type: 'string' },
+        downloadUrl: { type: 'string' },
+      },
+    },
+    CardShareResponse: {
+      type: 'object',
+      required: ['shareToken', 'shareUrl', 'ogTitle', 'ogDescription', 'compositeScore', 'propertyAddress', 'expiresAt'],
+      properties: {
+        shareToken: { type: 'string' },
+        shareUrl: { type: 'string' },
+        ogTitle: { type: 'string' },
+        ogDescription: { type: 'string' },
+        compositeScore: { type: 'number' },
+        propertyAddress: { type: 'string' },
+        expiresAt: { type: 'string' },
+      },
+    },
+  },
+};
+
 export const paths = {
   '/health': {
     get: {

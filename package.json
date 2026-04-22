@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "test-email": "tsx scripts/test-confirm-email.ts",
-    "generate:openapi": "tsx src/openapi/generate.ts"
+    "generate:openapi": "tsx src/openapi/generate.ts",
+    "generate:types": "tsx src/openapi/generate.ts && openapi-typescript openapi.yaml -o packages/types/src/generated.ts"
   },
   "keywords": [],
   "license": "UNLICENSED",
