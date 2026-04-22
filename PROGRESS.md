@@ -54,3 +54,26 @@ Search history backend is now live:
   - 24-hour cache check to avoid recomputing same property
   - GET /api/crux/searches/recent returns last 10 user searches
   - JSONB snapshot storage for fast history rendering (no re-scoring needed)
+
+## Prompt 20 — Pro Tier Gate
+
+- [x] TASK-20-A — feat(auth): add requirePro middleware for plan tier gating
+- [x] TASK-20-B — feat(billing): add plan endpoints stub for Pro tier
+- [x] TASK-20-C — docs(billing): document planned Pro-gated routes in routes/index.ts
+- [x] TASK-20-D — docs: mark Prompt 20 complete in PROGRESS.md
+
+## Backend Auth Layer Fully Complete
+
+The ComfHutt backend MVP is now feature-complete:
+  - **Prompt 17:** Clerk integration, session verification, user provisioning
+  - **Prompt 17-B:** Webhook-driven provisioning, onboarding flow, requireAuth on all routes
+  - **Prompt 18:** Atomic watch credit deduction with RPC guard, creditsRemaining in response
+  - **Prompt 19:** Search history persistence, 24h caching, recent searches endpoint
+  - **Prompt 20:** Pro tier gating middleware, billing endpoints stub, plan documentation
+  
+All core auth patterns in place. Frontend can now:
+  1. Check isNewUser flag and show onboarding if needed
+  2. Display creditsRemaining in watch UI
+  3. Cache score results for 24h
+  4. Show past 10 searches
+  5. Gate Pro features via /api/crux/billing/plans endpoint
