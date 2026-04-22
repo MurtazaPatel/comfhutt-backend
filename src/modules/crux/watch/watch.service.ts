@@ -32,6 +32,32 @@ export async function getOrSeedCredits(userId: string): Promise<{
   return seeded
 }
 
+export async function createWatchRegistration(
+  userId: string,
+  propertyId: string
+): Promise<{ watchId: string; alreadyWatching: boolean }> {
+  const { data: existing } = await supabase
+    .from('crux_watch_registrations')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('property_id', propertyId)
+    .maybeSingle()
+
+  if (existing) return { watchId: existing.id, alreadyWatching: true }
+
+  const { data: registration, error } = await supabase
+    .from('crux_watch_registrations')
+    .insert({ user_id: userId, property_id: propertyId })
+    .select('id')
+    .single()
+
+  if (error || !registration) {
+    throw new AppError(500, 'WATCH_REGISTER_FAILED', 'Watch registration failed.')
+  }
+
+  return { watchId: registration.id, alreadyWatching: false }
+}
+
 export async function registerWatch(
   userId: string,
   propertyId: string

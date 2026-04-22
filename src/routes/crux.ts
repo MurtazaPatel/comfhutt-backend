@@ -1,8 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { getAuth } from '@clerk/express';
 import { supabase } from '../lib/db';
 import { ingestProperty } from '../modules/crux/ingestion';
 import { AppError, isAppError } from '../modules/crux/shared/errors';
 import { requireAuth } from '../middleware/requireAuth';
+import { watchCreditGuard } from '../middleware/watchCreditGuard';
 import type { IntentProfile, LifecycleStage, MacroCycle } from '../modules/crux/shared/types';
 import { getOrComputeScore, forceRecomputeScore } from '../modules/crux/scoring';
 import { streamLensMessage } from '../modules/crux/agents/lens.agent'
@@ -10,7 +12,7 @@ import { generateReport } from '../modules/crux/agents/report.agent';
 import { createSession, getSession, getMessageHistory } from '../modules/crux/lens/lens.service';
 import { generateCard } from '../modules/crux/card/card.generator';
 import { getCardByToken } from '../modules/crux/card/card.service';
-import { getOrSeedCredits, registerWatch } from '../modules/crux/watch/watch.service';
+import { getOrSeedCredits, createWatchRegistration } from '../modules/crux/watch/watch.service';
 import {
   validateBody,
   validateParam,
@@ -302,25 +304,26 @@ router.get('/crux/watch/credits', requireAuth, async (req: Request, res: Respons
 
 router.post('/crux/watch/:property_id',
   requireAuth,
+  watchCreditGuard,
   validateParam('property_id', UUIDSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { property_id } = req.params
-      const userId = (req as any).user?.id
+      const { userId } = getAuth(req)
       if (!userId) {
         throw new AppError(401, 'UNAUTHORIZED', 'Watch requires an account. Sign in to use Watch credits.')
       }
-      const result = await registerWatch(userId, property_id as string)
+      const result = await createWatchRegistration(userId, property_id as string)
       res.json({
         success: true,
         data: {
-          watch_id: result.watch_id,
+          watch_id: result.watchId,
           property_id,
-          credits_remaining: result.credits_remaining,
-          already_watching: result.already_watching,
-          message: result.already_watching
+          creditsRemaining: req.watchCreditsRemaining,
+          already_watching: result.alreadyWatching,
+          message: result.alreadyWatching
             ? 'Already watching this property.'
-            : `Watch registered. ${result.credits_remaining} credit${result.credits_remaining === 1 ? '' : 's'} remaining.`,
+            : `Watch registered. ${req.watchCreditsRemaining} credit${req.watchCreditsRemaining === 1 ? '' : 's'} remaining.`,
           monitoring_status: 'pending_activation',
           monitoring_note: 'Score-change alerts are coming soon. Your watch is registered.',
         },
