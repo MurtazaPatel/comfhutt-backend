@@ -7,6 +7,8 @@ import developerOnboardingRouter from "./developer-onboarding";
 import propertiesRouter from "./properties";
 import authRouter from "./auth";
 import authEmailHookRouter from "./auth-email-hook";
+import authClerkRouter from "./auth.routes";
+import cruxRouter from "./crux";
 
 const router = Router();
 
@@ -21,5 +23,9 @@ router.use("/api/developer-onboarding", developerOnboardingRouter);
 router.use("/api/properties", propertiesRouter);
 router.use("/api/auth", authRouter);
 router.use("/api/auth-email-hook", authEmailHookRouter);
+
+// ── CRUX ─────────────────────────────────────────────
+router.use("/api/crux/auth", authClerkRouter);
+router.use("/api", cruxRouter);
 
 export default router;

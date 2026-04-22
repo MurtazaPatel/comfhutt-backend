@@ -2,3 +2,4 @@ export { corsMiddleware } from "./cors";
 export { helmetMiddleware, rateLimiter, requestIdMiddleware } from "./security";
 export { errorHandler } from "./errorHandler";
 export { requireInternalSecret } from "./internalSecret";
+export { requireAuth } from "./requireAuth";

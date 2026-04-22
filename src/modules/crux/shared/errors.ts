@@ -107,3 +107,19 @@ export type CruxErrorCode = keyof typeof CRUX_ERRORS;
 export function getCruxError(code: CruxErrorCode) {
   return CRUX_ERRORS[code];
 }
+
+export class AppError extends Error {
+  constructor(
+    public readonly statusCode: number,
+    public readonly code: string,
+    message: string,
+    public readonly details?: unknown
+  ) {
+    super(message)
+    this.name = 'AppError'
+    Object.setPrototypeOf(this, AppError.prototype)
+  }
+}
+
+export const isAppError = (err: unknown): err is AppError =>
+  err instanceof AppError

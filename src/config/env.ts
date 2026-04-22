@@ -32,6 +32,10 @@ interface EnvConfig {
   GOOGLE_MAPS_API_KEY: string;
   /** CRUX scoring engine version — stamped on every score */
   CRUX_VERSION: string;
+  /** Clerk backend secret key for session verification */
+  CLERK_SECRET_KEY: string;
+  /** Clerk publishable key (safe for client reference) */
+  CLERK_PUBLISHABLE_KEY: string;
 }
 
 function requireEnv(key: string): string {
@@ -55,4 +59,14 @@ export const env: EnvConfig = {
   GEMINI_API_KEY: requireEnv("GEMINI_API_KEY"),
   GOOGLE_MAPS_API_KEY: requireEnv("GOOGLE_MAPS_API_KEY"),
   CRUX_VERSION: process.env.CRUX_VERSION || "0.1.0",
+  CLERK_SECRET_KEY: requireEnv("CLERK_SECRET_KEY"),
+  CLERK_PUBLISHABLE_KEY: requireEnv("CLERK_PUBLISHABLE_KEY"),
 };
+
+// CRUX Data Source URLs (defaults to public government endpoints)
+export const CPCB_API_URL = process.env.CPCB_API_URL || 'https://app.cpcbccr.com/caaqms/caaqms_viewData_v2';
+export const MCA21_SEARCH_URL = process.env.MCA21_SEARCH_URL || 'https://www.mca.gov.in/mcafoportal/companyLLPMasterData.do';
+export const ECOURTS_API_URL = process.env.ECOURTS_API_URL || 'https://webapi.ecourtsindia.com/api/partner';
+export const ECOURTS_API_KEY = process.env.ECOURTS_API_KEY || '';
+export const NHB_RESIDEX_TABLE = 'crux_residex_cache';
+export const CPWD_RATES_TABLE = 'crux_cpwd_cache';

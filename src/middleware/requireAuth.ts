@@ -1,21 +1,17 @@
-import { Request, Response, NextFunction } from "express";
-import { getUser } from "../services/auth";
+import type { Request, Response, NextFunction } from "express";
+import { getAuth } from "@clerk/express";
+import { AppError } from "../modules/crux/shared/errors";
 
-export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
+export function requireAuth(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): void {
+  const { userId } = getAuth(req);
+  if (!userId) {
+    return next(
+      new AppError(401, "UNAUTHORIZED", "Authentication required.")
+    );
   }
-
-  const token = authHeader.split(" ")[1];
-
-  try {
-    const user = await getUser(token);
-    (req as any).user = user;
-    next();
-  } catch (error) {
-    res.status(401).json({ error: "Unauthorized" });
-  }
-};
+  next();
+}

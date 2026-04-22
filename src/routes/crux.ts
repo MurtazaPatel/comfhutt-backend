@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { supabase } from '../lib/db';
 import { ingestProperty } from '../modules/crux/ingestion';
 import { AppError, isAppError } from '../modules/crux/shared/errors';
+import { requireAuth } from '../middleware/requireAuth';
 import type { IntentProfile, LifecycleStage, MacroCycle } from '../modules/crux/shared/types';
 import { getOrComputeScore, forceRecomputeScore } from '../modules/crux/scoring';
 import { streamLensMessage } from '../modules/crux/agents/lens.agent'
@@ -86,7 +87,7 @@ router.get('/crux/property/:id',
   });
 
 // ── Scoring ─────────────────────────────────────────────────────────────────
-router.post('/crux/score', (_req: Request, res: Response): void => {
+router.post('/crux/score', requireAuth, (_req: Request, res: Response): void => {
   console.info('CRUX POST /crux/score hit');
   res.status(501).json({
     success: false,
@@ -101,6 +102,7 @@ const VALID_LIFECYCLES: LifecycleStage[] = ['near_completion', 'delivered'];
 const VALID_CYCLES: MacroCycle[] = ['growth', 'correction'];
 
 router.get('/crux/score/:property_id',
+  requireAuth,
   scoreFetchLimit,
   validateParam('property_id', UUIDSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -142,6 +144,7 @@ router.get('/crux/score/:property_id',
   });
 
 router.post('/crux/score/:property_id/compute',
+  requireAuth,
   scoreComputeLimit,
   validateParam('property_id', UUIDSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -184,6 +187,7 @@ router.post('/crux/score/:property_id/compute',
 
 // ── Lens (chat) ─────────────────────────────────────────────────────────────
 router.post('/crux/lens/session',
+  requireAuth,
   lensSessionLimit,
   validateBody(LensSessionSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -223,6 +227,7 @@ router.post('/crux/lens/session',
   });
 
 router.post('/crux/lens/:session_id/message',
+  requireAuth,
   lensMessageLimit,
   validateParam('session_id', UUIDSchema),
   validateBody(LensMessageSchema),
@@ -240,6 +245,7 @@ router.post('/crux/lens/:session_id/message',
   });
 
 router.get('/crux/lens/:session_id/history',
+  requireAuth,
   validateParam('session_id', UUIDSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     console.info('CRUX GET /crux/lens/:session_id/history hit');
@@ -273,7 +279,7 @@ router.get('/crux/lens/:session_id/history',
   });
 
 // ── Watch ───────────────────────────────────────────────────────────────────
-router.get('/crux/watch/credits', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.get('/crux/watch/credits', requireAuth, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = (req as any).user?.id
     if (!userId) {
@@ -294,6 +300,7 @@ router.get('/crux/watch/credits', async (req: Request, res: Response, next: Next
 });
 
 router.post('/crux/watch/:property_id',
+  requireAuth,
   validateParam('property_id', UUIDSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -413,6 +420,7 @@ router.get('/crux/dashboard', (_req: Request, res: Response): void => {
 
 // ── Report ──────────────────────────────────────────────────────────────────
 router.get('/crux/report/:property_id',
+  requireAuth,
   reportLimit,
   validateParam('property_id', UUIDSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {

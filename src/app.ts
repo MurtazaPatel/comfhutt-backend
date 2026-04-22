@@ -1,4 +1,5 @@
 import express from "express";
+import { clerkMiddleware } from "@clerk/express";
 import {
   corsMiddleware,
   helmetMiddleware,
@@ -23,6 +24,9 @@ export function createApp(): express.Application {
   // ── Body parsing ──────────────────────────────────────
   app.use(express.json({ limit: "50kb" }));
   app.use(express.urlencoded({ limit: "50kb", extended: true }));
+
+  // ── Clerk session verification ────────────────────────
+  app.use(clerkMiddleware());
 
   // ── Global rate backstop (300 req / 15 min / IP) ──────
   app.use(rateLimiter);
