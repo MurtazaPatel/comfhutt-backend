@@ -90,13 +90,15 @@ export async function getCardByToken(shareToken: string): Promise<CruxCardRow> {
     throw new AppError(404, 'CARD_NOT_FOUND', 'Card not found or has expired.')
   }
 
+  const newViewCount = (data.view_count ?? 0) + 1
+
   supabase
     .from('crux_cards')
-    .update({ view_count: (data.view_count ?? 0) + 1 })
+    .update({ view_count: newViewCount })
     .eq('share_token', shareToken)
     .then(({ error: updateError }) => {
       if (updateError) console.error('[card.service] view_count update failed:', updateError)
     })
 
-  return data as CruxCardRow
+  return { ...data, view_count: newViewCount } as CruxCardRow
 }

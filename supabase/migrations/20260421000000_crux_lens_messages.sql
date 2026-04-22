@@ -45,3 +45,7 @@ CREATE POLICY "anon can access own session messages"
 -- Comment
 COMMENT ON TABLE public.crux_lens_messages IS
   'Lens chat messages. FK to crux_lens_sessions. Rolling 10-message window enforced in application layer.';
+
+-- Grants
+GRANT ALL ON public.crux_lens_messages TO service_role;
+GRANT SELECT, INSERT ON public.crux_lens_messages TO anon, authenticated;
