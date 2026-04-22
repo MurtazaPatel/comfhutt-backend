@@ -69,7 +69,7 @@ The ComfHutt backend MVP is now feature-complete:
   - **Prompt 17-B:** Webhook-driven provisioning, onboarding flow, requireAuth on all routes
   - **Prompt 18:** Atomic watch credit deduction with RPC guard, creditsRemaining in response
   - **Prompt 19:** Search history persistence, 24h caching, recent searches endpoint
-  - **Prompt 20:** Pro tier gating middleware, billing endpoints stub, plan documentation
+  - **Prompt 20 (v1):** Pro tier gating middleware, billing endpoints stub, plan documentation
   
 All core auth patterns in place. Frontend can now:
   1. Check isNewUser flag and show onboarding if needed
@@ -77,3 +77,32 @@ All core auth patterns in place. Frontend can now:
   3. Cache score results for 24h
   4. Show past 10 searches
   5. Gate Pro features via /api/crux/billing/plans endpoint
+
+## Prompt 21 — Backend DevOps: Contract Layer (OpenAPI + Shared Types)
+
+- [x] TASK-21-A — feat(types): add shared types package `@comfhutt/types`
+  - `packages/types/src/{error,auth,crux}.types.ts` with all request/response shapes
+  - pnpm-workspace.yaml for monorepo workspace discovery
+- [x] TASK-21-B — chore(backend): install swagger-jsdoc + openapi-typescript
+- [x] TASK-21-C — feat(backend): add OpenAPI spec generator
+  - `src/openapi/{openapi.base,schemas,generate}.ts`
+  - `pnpm generate:openapi` script
+- [x] TASK-21-D — chore(backend): wire `@comfhutt/types` workspace package
+  - Added to root package.json dependencies with `workspace:*` protocol
+- [x] TASK-21-E — chore(monorepo): add `pnpm generate:types` script
+  - Generates openapi.yaml + TypeScript types via openapi-typescript
+  - `packages/types/src/generated.ts` exported from main index
+
+## Backend Contract Layer Complete
+
+The monorepo now has a single source of truth (OpenAPI spec) with auto-generated TypeScript:
+  - **Shared types:** `@comfhutt/types` consumed by both backend and frontend
+  - **OpenAPI spec:** `openapi.yaml` covers all CRUX MVP endpoints
+  - **Type generation:** `pnpm generate:types` syncs spec → TypeScript
+  - **Hand-written types:** Error, Auth, CRUX domain types in packages/types
+  - **Generated types:** Full OpenAPI paths + components auto-generated
+
+Frontend can now:
+  1. Import types from `@comfhutt/types` for type safety
+  2. Use OpenAPI spec for MSW mock handlers
+  3. Generate types in CI/CD whenever backend schema changes
