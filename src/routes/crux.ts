@@ -62,6 +62,7 @@ router.post('/crux/property',
   });
 
 router.get('/crux/property/:id',
+  requireAuth,
   validateParam('id', UUIDSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     console.info('CRUX GET /crux/property/:id hit');
@@ -353,6 +354,7 @@ router.get('/crux/yield/:property_id', (_req: Request, res: Response): void => {
 
 // ── Card ────────────────────────────────────────────────────────────────────
 router.post('/crux/card/:property_id',
+  requireAuth,
   cardGenerationLimit,
   validateParam('property_id', UUIDSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
