@@ -13,6 +13,7 @@ import { createSession, getSession, getMessageHistory } from '../modules/crux/le
 import { generateCard } from '../modules/crux/card/card.generator';
 import { getCardByToken } from '../modules/crux/card/card.service';
 import { getOrSeedCredits, createWatchRegistration } from '../modules/crux/watch/watch.service';
+import { persistSearch, findRecentSearch } from '../services/searchHistory.service';
 import {
   validateBody,
   validateParam,
@@ -130,12 +131,48 @@ router.get('/crux/score/:property_id',
     }
 
     try {
+      const { userId } = getAuth(req);
+      if (!userId) throw new AppError(401, 'UNAUTHORIZED', 'Authentication required.');
+
+      const cached = await findRecentSearch(userId, property_id, 24);
+      if (cached) {
+        console.info({ userId, property_id }, 'Score: serving cached result');
+        res.status(200).json({
+          success: true,
+          data: {
+            ...cached.score_snapshot,
+            propertyId: cached.property_id,
+            shareToken: cached.share_token,
+            fromCache: true,
+            cachedAt: cached.searched_at,
+          },
+        });
+        return;
+      }
+
       const score = await getOrComputeScore(
         property_id,
         intent as IntentProfile,
         lifecycle as LifecycleStage,
         macro_cycle as MacroCycle,
       );
+
+      await persistSearch({
+        clerkUserId: userId,
+        propertyId: property_id,
+        addressRaw: null,
+        cruxScore: score.score_composite,
+        scoreGrade: 'Unknown',
+        scoreSnapshot: {
+          totalScore: score.score_composite,
+          grade: 'Unknown',
+          categoryScores: score.score_breakdown,
+          confidence: score.confidence_score,
+          timestamp: new Date().toISOString(),
+        },
+        shareToken: null,
+      });
+
       res.status(200).json({ success: true, data: score });
     } catch (err) {
       if (isAppError(err)) {
@@ -172,12 +209,32 @@ router.post('/crux/score/:property_id/compute',
     }
 
     try {
+      const { userId } = getAuth(req);
+      if (!userId) throw new AppError(401, 'UNAUTHORIZED', 'Authentication required.');
+
       const score = await forceRecomputeScore(
         property_id,
         intent as IntentProfile,
         lifecycle as LifecycleStage,
         macro_cycle as MacroCycle,
       );
+
+      await persistSearch({
+        clerkUserId: userId,
+        propertyId: property_id,
+        addressRaw: null,
+        cruxScore: score.score_composite,
+        scoreGrade: 'Unknown',
+        scoreSnapshot: {
+          totalScore: score.score_composite,
+          grade: 'Unknown',
+          categoryScores: score.score_breakdown,
+          confidence: score.confidence_score,
+          timestamp: new Date().toISOString(),
+        },
+        shareToken: null,
+      });
+
       res.status(200).json({ success: true, data: score });
     } catch (err) {
       if (isAppError(err)) {
