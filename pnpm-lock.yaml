@@ -44,6 +44,9 @@ importers:
       resend:
         specifier: ^6.9.3
         version: 6.12.2
+      svix:
+        specifier: ^1.91.1
+        version: 1.91.1
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -793,6 +796,9 @@ packages:
 
   svix@1.90.0:
     resolution: {integrity: sha512-ljkZuyy2+IBEoESkIpn8sLM+sxJHQcPxlZFxU+nVDhltNfUMisMBzWX/UR8SjEnzoI28ZjCzMbmYAPwSTucoMw==}
+
+  svix@1.91.1:
+    resolution: {integrity: sha512-Vn8nuer+o3NhGLHJNW3CPxls3te8YLr0xC3ImfcksG7taC/A+o8+PcVAK4sj1LJs4kM9HdmkXBnS3WU4E0YHHA==}
 
   toidentifier@1.0.1:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
@@ -1590,6 +1596,11 @@ snapshots:
   std-env@3.10.0: {}
 
   svix@1.90.0:
+    dependencies:
+      standardwebhooks: 1.0.0
+      uuid: 10.0.0
+
+  svix@1.91.1:
     dependencies:
       standardwebhooks: 1.0.0
       uuid: 10.0.0

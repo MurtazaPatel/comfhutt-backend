@@ -7,6 +7,7 @@ import {
   requestIdMiddleware,
   errorHandler,
 } from "./middleware";
+import webhooksRouter from "./routes/webhooks.routes";
 import routes from "./routes";
 
 export function createApp(): express.Application {
@@ -20,6 +21,10 @@ export function createApp(): express.Application {
   app.use(helmetMiddleware);
   app.use(corsMiddleware);
   app.use(requestIdMiddleware);
+
+  // ── Webhooks (raw body for Svix verification) ────────
+  // CRITICAL: Must be before express.json() to preserve raw body
+  app.use('/webhooks', express.raw({ type: 'application/json' }), webhooksRouter);
 
   // ── Body parsing ──────────────────────────────────────
   app.use(express.json({ limit: "50kb" }));

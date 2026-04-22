@@ -27,6 +27,7 @@
     "ngrok": "^5.0.0-beta.2",
     "opossum": "^8.5.0",
     "resend": "^6.9.3",
+    "svix": "^1.91.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
