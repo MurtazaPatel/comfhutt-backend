@@ -1,5 +1,6 @@
 import { supabase } from '../../../lib/db'
 import { AppError } from '../shared/errors'
+import type { ResearchCitation } from '../shared/types'
 
 export interface CruxReportRow {
   id: string
@@ -16,6 +17,8 @@ export interface CruxReportRow {
   }
   risk_flags: string[]
   positive_signals: string[]
+  research_highlights: string[]
+  citations: ResearchCitation[]
   sebi_disclaimer: string
   crux_version: string
   generated_at: string

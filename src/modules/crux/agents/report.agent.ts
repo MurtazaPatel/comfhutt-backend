@@ -3,6 +3,8 @@ import { supabase } from '../../../lib/db'
 import { AppError } from '../shared/errors'
 import { getOrComputeScore } from '../scoring'
 import { getCachedReport, saveReport, CruxReportRow } from '../report/report.service'
+import { getLatestResearch } from './research.agent'
+import { buildResearchCitations, buildResearchContextBlock, buildResearchHighlights } from '../research'
 import type { IntentProfile, LifecycleStage, MacroCycle } from '../shared/types'
 
 const SEBI_DISCLAIMER =
@@ -48,7 +50,8 @@ function buildReportUserPrompt(
     intent_profile: string
     lifecycle_stage: string
     macro_cycle: string
-  }
+  },
+  researchContext: string
 ): string {
   return `
 Generate a CRUX property analysis report for the following property and score data.
@@ -65,6 +68,9 @@ CRUX SCORE DATA:
 - Data Sources Used: ${score.data_sources_used.join(', ')}
 - Degraded Data: ${score.degraded ? 'Yes — some sources were unavailable' : 'No'}
 - Score Breakdown: ${JSON.stringify(score.score_breakdown, null, 2)}
+
+RESEARCH EVIDENCE:
+${researchContext}
 
 Respond ONLY with a valid JSON object matching this exact schema — no preamble, no markdown fences:
 {
@@ -85,6 +91,10 @@ Respond ONLY with a valid JSON object matching this exact schema — no preamble
     "Plain-language positive statement 1",
     "Plain-language positive statement 2",
     "Plain-language positive statement 3"
+  ],
+  "research_highlights": [
+    "Optional evidence-backed research highlight 1",
+    "Optional evidence-backed research highlight 2"
   ]
 }
 
@@ -93,6 +103,7 @@ Rules for risk_flags and positive_signals:
 - Each statement must be specific to THIS property's data — never generic
 - Risk flags must be honest even if unflattering — credibility depends on it
 - If confidence is below 0.5, include a risk flag noting data gaps
+- research_highlights may be empty if no accepted research evidence exists
 `.trim()
 }
 
@@ -122,6 +133,9 @@ export async function generateReport(propertyId: string, intent: string = 'balan
     'growth' as MacroCycle
   )
 
+  const research = await getLatestResearch(propertyId)
+  const researchContext = buildResearchContextBlock(research?.digest ?? null)
+
   // 4. Build prompts
   const systemPrompt = buildReportSystemPrompt()
   const userPrompt = buildReportUserPrompt(
@@ -141,7 +155,8 @@ export async function generateReport(propertyId: string, intent: string = 'balan
       intent_profile: intent,
       lifecycle_stage: score.lifecycle_stage ?? 'delivered',
       macro_cycle: score.macro_cycle ?? 'growth',
-    }
+    },
+    researchContext,
   )
 
   // 5. Call Gemini — non-streaming, JSON output
@@ -163,6 +178,7 @@ export async function generateReport(propertyId: string, intent: string = 'balan
     category_narratives: CruxReportRow['category_narratives']
     risk_flags: string[]
     positive_signals: string[]
+    research_highlights?: string[]
   }
 
   try {
@@ -191,6 +207,10 @@ export async function generateReport(propertyId: string, intent: string = 'balan
     category_narratives: parsed.category_narratives,
     risk_flags: parsed.risk_flags.slice(0, 5),
     positive_signals: parsed.positive_signals.slice(0, 5),
+    research_highlights: Array.isArray(parsed.research_highlights)
+      ? parsed.research_highlights.slice(0, 5)
+      : buildResearchHighlights(research?.digest ?? null),
+    citations: buildResearchCitations(research?.digest ?? null),
     sebi_disclaimer: SEBI_DISCLAIMER,
     crux_version: score.crux_version,
     generated_at: new Date().toISOString(),
@@ -202,13 +222,18 @@ export async function generateReport(propertyId: string, intent: string = 'balan
 
   // 10. Write agent log (non-blocking)
   supabase.from('crux_agent_logs').insert({
-    agent_type: 'reporter',
+    agent_type: 'report',
     property_id: propertyId,
-    input_summary: { intent, score_composite: score.score_composite },
-    output_summary: { risk_flags: saved.risk_flags.length, positive_signals: saved.positive_signals.length },
-    duration_ms: Date.now() - startTime,
-    model_used: GEMINI_MODELS.REPORT_AGENT,
+    input_payload: { intent, score_composite: score.score_composite, research_accepted: research?.digest.accepted_count ?? 0 },
+    output_payload: {
+      risk_flags: saved.risk_flags.length,
+      positive_signals: saved.positive_signals.length,
+      research_highlights: saved.research_highlights.length,
+    },
+    latency_ms: Date.now() - startTime,
+    llm_provider: 'gemini',
     tokens_used: null,
+    status: 'success',
   }).then(({ error }: { error: unknown }) => {
     if (error) console.error('[report.agent] log write failed:', error)
   })

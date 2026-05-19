@@ -11,6 +11,8 @@ import {
   checkMessageLimit,
 } from '../lens/lens.service'
 import { getOrComputeScore } from '../scoring'
+import { getLatestResearch, runResearch } from './research.agent'
+import { buildResearchContextBlock } from '../research'
 import type { CruxScore } from '../shared/types'
 
 interface PropertyRow {
@@ -24,6 +26,7 @@ interface PropertyRow {
   state: string | null
   property_type: string | null
   approx_size_sqft: number | null
+  research_context?: string
 }
 
 function buildSystemPrompt(property: PropertyRow, score: CruxScore | null): string {
@@ -55,9 +58,13 @@ CRUX Score for this property (intent: ${score.intent_profile}):
 No CRUX Score has been computed for this property yet. If the user asks about the score, you can offer to trigger one by using the triggerScore function tool.
 `}
 
+## LAYER 3B — RESEARCH EVIDENCE CONTEXT
+${property.research_context ?? 'No research evidence is cached for this property yet. Use triggerResearch when the user wants deeper evidence-backed research.'}
+
 ## LAYER 4 — AVAILABLE TOOLS
 You have access to these functions to assist users:
 - triggerScore: Compute or refresh the CRUX Score for this property
+- triggerResearch: Run or refresh CRUX Research evidence for this property
 - triggerCast: Get CRUX Cast (AI property valuation — fair market value range)
 - triggerYield: Get CRUX Yield (rental income estimate and yield percentage)
 - askClarification: Ask the user for a missing data point that would improve scoring accuracy
@@ -83,6 +90,30 @@ const LENS_TOOLS: Tool[] = [
               format: 'enum',
               description: 'Investment intent: yield, appreciation, or balanced',
               enum: ['yield', 'appreciation', 'balanced']
+            }
+          },
+          required: []
+        }
+      },
+      {
+        name: 'triggerResearch',
+        description: 'Run or refresh CRUX Research for the current property. Use when the user wants citations, evidence-backed analysis, or deeper research.',
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            seed_urls: {
+              type: SchemaType.ARRAY,
+              description: 'Optional authoritative URLs to inspect first',
+              items: { type: SchemaType.STRING }
+            },
+            document_paths: {
+              type: SchemaType.ARRAY,
+              description: 'Optional server-accessible document paths to parse',
+              items: { type: SchemaType.STRING }
+            },
+            force_refresh: {
+              type: SchemaType.BOOLEAN,
+              description: 'Whether to bypass the current research cache'
             }
           },
           required: []
@@ -144,6 +175,16 @@ async function executeTool(
       )
       return { result: score, moduleType: 'score' }
     }
+    case 'triggerResearch': {
+      const research = await runResearch({
+        property_id: propertyId,
+        seed_urls: Array.isArray(toolArgs.seed_urls) ? toolArgs.seed_urls as string[] : [],
+        document_paths: Array.isArray(toolArgs.document_paths) ? toolArgs.document_paths as string[] : [],
+        force_refresh: Boolean(toolArgs.force_refresh),
+        surface: 'lens',
+      })
+      return { result: research, moduleType: 'research' }
+    }
     case 'triggerCast': {
       return {
         result: { status: 'coming_soon', message: 'CRUX Cast is launching soon. Score and Lens are live now.' },
@@ -199,7 +240,7 @@ export async function streamLensMessage(
     await checkMessageLimit(sessionId)
     await refreshSession(sessionId)
 
-    const [propertyResult, scoreResult] = await Promise.allSettled([
+    const [propertyResult, scoreResult, researchResult] = await Promise.allSettled([
       supabase
         .from('crux_properties')
         .select('*')
@@ -211,11 +252,13 @@ export async function streamLensMessage(
         .eq('property_id', session.property_id)
         .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle()
+        .maybeSingle(),
+      getLatestResearch(session.property_id)
     ])
 
     const property = propertyResult.status === 'fulfilled' ? propertyResult.value.data : null
     const score = scoreResult.status === 'fulfilled' ? scoreResult.value.data : null
+    const research = researchResult.status === 'fulfilled' ? researchResult.value : null
 
     if (!property) {
       throw new AppError(404, 'PROPERTY_NOT_FOUND', 'Property not found for this session.')
@@ -223,7 +266,10 @@ export async function streamLensMessage(
 
     const history = await getMessageHistory(sessionId)
 
-    const systemPrompt = buildSystemPrompt(property as PropertyRow, score as CruxScore | null)
+    const systemPrompt = buildSystemPrompt({
+      ...(property as PropertyRow),
+      research_context: buildResearchContextBlock(research?.digest ?? null),
+    }, score as CruxScore | null)
 
     const contents: Content[] = [
       ...history.map(msg => ({

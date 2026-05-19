@@ -33,6 +33,13 @@ export const LensMessageSchema = z.object({
     .transform(s => s.trim()),
 })
 
+export const ResearchRequestSchema = z.object({
+  seed_urls: z.array(z.string().url('Each seed URL must be valid')).max(10).optional(),
+  document_paths: z.array(z.string().min(1, 'Document path cannot be empty')).max(10).optional(),
+  force_refresh: z.boolean().optional(),
+  surface: z.enum(['api', 'lens', 'report']).optional(),
+})
+
 // ── Middleware factories ──────────────────────────────────────────
 
 export function validateBody<T>(schema: z.ZodSchema<T>) {

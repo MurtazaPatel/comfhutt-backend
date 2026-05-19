@@ -38,6 +38,16 @@ interface EnvConfig {
   CLERK_PUBLISHABLE_KEY: string;
   /** Clerk webhook signing secret for Svix verification */
   CLERK_WEBHOOK_SECRET: string;
+  /** Tavily API key for CRUX research evidence agent */
+  TAVILY_API_KEY: string;
+  /** Research evidence cache TTL in hours */
+  CRUX_RESEARCH_TTL_HOURS: number;
+  /** Max Tavily web results to inspect per run */
+  CRUX_RESEARCH_MAX_WEB_RESULTS: number;
+  /** Max evidence items persisted per run */
+  CRUX_RESEARCH_MAX_EVIDENCE_ITEMS: number;
+  /** Optional comma-separated allowed domains override */
+  CRUX_RESEARCH_ALLOWED_DOMAINS: string[];
 }
 
 function requireEnv(key: string): string {
@@ -64,6 +74,14 @@ export const env: EnvConfig = {
   CLERK_SECRET_KEY: requireEnv("CLERK_SECRET_KEY"),
   CLERK_PUBLISHABLE_KEY: requireEnv("CLERK_PUBLISHABLE_KEY"),
   CLERK_WEBHOOK_SECRET: requireEnv("CLERK_WEBHOOK_SECRET"),
+  TAVILY_API_KEY: process.env.TAVILY_API_KEY || "",
+  CRUX_RESEARCH_TTL_HOURS: parseInt(process.env.CRUX_RESEARCH_TTL_HOURS || "24", 10),
+  CRUX_RESEARCH_MAX_WEB_RESULTS: parseInt(process.env.CRUX_RESEARCH_MAX_WEB_RESULTS || "8", 10),
+  CRUX_RESEARCH_MAX_EVIDENCE_ITEMS: parseInt(process.env.CRUX_RESEARCH_MAX_EVIDENCE_ITEMS || "20", 10),
+  CRUX_RESEARCH_ALLOWED_DOMAINS: (process.env.CRUX_RESEARCH_ALLOWED_DOMAINS || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean),
 };
 
 // CRUX Data Source URLs (defaults to public government endpoints)

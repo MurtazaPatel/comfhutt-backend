@@ -17,7 +17,7 @@ export type PropertyType =
   | 'commercial_retail'
   | 'plot';
 
-export type AgentType = 'fetcher' | 'scorer' | 'report' | 'lens';
+export type AgentType = 'fetcher' | 'scorer' | 'report' | 'lens' | 'research';
 
 // ─── Property ────────────────────────────────────────────────────────────────
 
@@ -32,6 +32,7 @@ export interface PropertyProfile {
   state: string;
   property_type: PropertyType;
   approx_size_sqft: number | null;
+  developer_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -121,6 +122,146 @@ export interface AggregatedFetcherOutput {
   sources_attempted: number;           // always 6
 }
 
+// ─── Research Evidence ───────────────────────────────────────────────────────
+
+export type ResearchRunStatus = 'running' | 'success' | 'partial_failed' | 'failed';
+
+export type ResearchSurface = 'api' | 'lens' | 'report';
+
+export type ResearchProvider = 'tavily';
+
+export type EvidenceDomain =
+  | 'property'
+  | 'developer'
+  | 'locality'
+  | 'market'
+  | 'legal'
+  | 'environment';
+
+export type EvidenceSourceKind = 'web' | 'document';
+
+export type EvidenceAuthorityTier = 'official' | 'primary' | 'secondary' | 'unknown';
+
+export type EvidenceStatus = 'accepted' | 'weak' | 'rejected';
+
+export type ResearchDocumentParseStatus = 'pending' | 'parsed' | 'failed' | 'skipped';
+
+export interface ResearchRunSummary {
+  queries_executed: number;
+  results_fetched: number;
+  documents_total: number;
+  documents_parsed: number;
+  documents_failed: number;
+  evidence_accepted: number;
+  evidence_weak: number;
+  evidence_rejected: number;
+}
+
+export interface ResearchRunInput {
+  property_id: string;
+  seed_urls?: string[];
+  document_paths?: string[];
+  force_refresh?: boolean;
+  surface?: ResearchSurface;
+}
+
+export interface ResearchDocumentInput {
+  file_path: string;
+}
+
+export interface ResearchDocumentRow {
+  id: string;
+  run_id: string;
+  file_path: string;
+  file_type: string;
+  content_hash: string;
+  parse_status: ResearchDocumentParseStatus;
+  parse_error: string | null;
+  parsed_at: string | null;
+  created_at: string;
+}
+
+export interface ResearchRunRow {
+  id: string;
+  property_id: string;
+  status: ResearchRunStatus;
+  initiated_by_surface: ResearchSurface;
+  provider: ResearchProvider;
+  seed_urls: string[];
+  document_paths: string[];
+  summary_counts: ResearchRunSummary;
+  started_at: string;
+  completed_at: string | null;
+  ttl_expires_at: string;
+  last_error: string | null;
+  created_at: string;
+}
+
+export interface SearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+  raw_content: string | null;
+  score: number | null;
+  published_at: string | null;
+}
+
+export interface PageContent {
+  url: string;
+  title: string;
+  text_content: string;
+  excerpt: string;
+  fetched_at: string;
+}
+
+export interface ExtractedEvidenceDraft {
+  domain: EvidenceDomain;
+  claim_text: string;
+  normalized_claim: Record<string, unknown>;
+  observed_at?: string | null;
+  confidence: number;
+}
+
+export interface EvidenceItem {
+  id: string;
+  run_id: string;
+  property_id: string;
+  domain: EvidenceDomain;
+  source_kind: EvidenceSourceKind;
+  authority_tier: EvidenceAuthorityTier;
+  status: EvidenceStatus;
+  claim_text: string;
+  normalized_claim: Record<string, unknown>;
+  source_title: string;
+  source_url: string | null;
+  source_path: string | null;
+  excerpt: string;
+  observed_at: string | null;
+  freshness_expires_at: string | null;
+  confidence: number;
+  rejection_reason: string | null;
+  claim_hash: string;
+  created_at: string;
+}
+
+export interface ResearchEvidenceDigest {
+  run_id: string;
+  status: ResearchRunStatus;
+  accepted_count: number;
+  weak_count: number;
+  rejected_count: number;
+  accepted_items: EvidenceItem[];
+  weak_items: EvidenceItem[];
+}
+
+export interface ResearchCitation {
+  claim: string;
+  source_title: string;
+  source_url_or_path: string;
+  authority_tier: EvidenceAuthorityTier;
+  observed_at: string | null;
+}
+
 // ─── Clarification (agent → user via Lens) ────────────────────────────────────
 
 export interface ClarificationRequest {
@@ -180,6 +321,8 @@ export interface CruxReport {
   developer_narrative: string;     // developer track record in plain language
   legal_narrative: string;         // legal standing summary
   market_narrative: string;        // market context and pricing
+  research_highlights: string[];
+  citations: ResearchCitation[];
   disclaimer: string;              // SEBI-mandated, always present, never omitted
   generated_at: string;
   crux_version: string;
@@ -274,8 +417,8 @@ export interface SseChunk {
 }
 
 export interface LensModuleResult {
-  type: 'score' | 'report';
-  data: CruxScore | CruxReport;
+  type: 'score' | 'report' | 'research';
+  data: CruxScore | CruxReport | ResearchEvidenceDigest;
 }
 
 // ─── User Dashboard ───────────────────────────────────────────────────────────

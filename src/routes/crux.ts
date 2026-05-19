@@ -9,6 +9,7 @@ import type { IntentProfile, LifecycleStage, MacroCycle } from '../modules/crux/
 import { getOrComputeScore, forceRecomputeScore } from '../modules/crux/scoring';
 import { streamLensMessage } from '../modules/crux/agents/lens.agent'
 import { generateReport } from '../modules/crux/agents/report.agent';
+import { getLatestResearch, runResearch } from '../modules/crux/agents/research.agent';
 import { createSession, getSession, getMessageHistory } from '../modules/crux/lens/lens.service';
 import { generateCard } from '../modules/crux/card/card.generator';
 import { getCardByToken } from '../modules/crux/card/card.service';
@@ -20,6 +21,7 @@ import {
   PropertyIngestionSchema,
   LensSessionSchema,
   LensMessageSchema,
+  ResearchRequestSchema,
   UUIDSchema,
   ShareTokenSchema,
 } from '../middleware/validation.middleware';
@@ -265,7 +267,7 @@ router.post('/crux/lens/session',
         throw new AppError(404, 'PROPERTY_NOT_FOUND', 'Property not found. Ingest it first via POST /crux/property.');
       }
 
-      const userId = (req as Request & { user?: { id?: string } }).user?.id;
+      const { userId } = getAuth(req)
       const session = await createSession(property_id, userId);
 
       res.json({
@@ -285,6 +287,61 @@ router.post('/crux/lens/session',
       next(err);
     }
   });
+
+// ── Research ───────────────────────────────────────────────────────────────
+router.post('/crux/research/:property_id',
+  requireAuth,
+  validateParam('property_id', UUIDSchema),
+  validateBody(ResearchRequestSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const rawId = req.params.property_id
+      const property_id = Array.isArray(rawId) ? (rawId[0] ?? '') : rawId
+      const body = req.body as {
+        seed_urls?: string[]
+        document_paths?: string[]
+        force_refresh?: boolean
+        surface?: 'api' | 'lens' | 'report'
+      }
+
+      const result = await runResearch({
+        property_id,
+        seed_urls: body.seed_urls,
+        document_paths: body.document_paths,
+        force_refresh: body.force_refresh,
+        surface: body.surface ?? 'api',
+      })
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      })
+    } catch (err) {
+      next(err)
+    }
+  })
+
+router.get('/crux/research/:property_id',
+  requireAuth,
+  validateParam('property_id', UUIDSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const rawId = req.params.property_id
+      const property_id = Array.isArray(rawId) ? (rawId[0] ?? '') : rawId
+      const result = await getLatestResearch(property_id)
+
+      if (!result) {
+        throw new AppError(404, 'RESEARCH_NOT_FOUND', 'No research run found for this property.')
+      }
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      })
+    } catch (err) {
+      next(err)
+    }
+  })
 
 router.post('/crux/lens/:session_id/message',
   requireAuth,

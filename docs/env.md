@@ -22,6 +22,16 @@
 |---|---|---|
 | `GEMINI_API_KEY` | Yes | Google AI Studio API key. From [ai.google.dev](https://ai.google.dev) → Get API key |
 
+## Research (Tavily)
+
+| Variable | Required | Description |
+|---|---|---|
+| `TAVILY_API_KEY` | Yes, when web research is enabled | Tavily API key for the CRUX Research Evidence Agent |
+| `CRUX_RESEARCH_TTL_HOURS` | No | Cache TTL for research runs. Default: `24` |
+| `CRUX_RESEARCH_MAX_WEB_RESULTS` | No | Max Tavily results fetched per run. Default: `8` |
+| `CRUX_RESEARCH_MAX_EVIDENCE_ITEMS` | No | Max evidence items persisted per run. Default: `20` |
+| `CRUX_RESEARCH_ALLOWED_DOMAINS` | No | Optional comma-separated allowed domain override for accepted web evidence |
+
 ## Maps (Google)
 
 | Variable | Required | Description |
