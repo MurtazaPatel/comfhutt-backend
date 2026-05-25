@@ -54,7 +54,7 @@ interface EvidenceInsert {
   claim_hash: string
 }
 
-interface ResearchRepository {
+export interface ResearchRepository {
   getProperty(propertyId: string): Promise<PropertyProfile | null>
   getReusableRun(propertyId: string, nowIso: string): Promise<ResearchRunRow | null>
   getRunById(runId: string): Promise<ResearchRunRow | null>

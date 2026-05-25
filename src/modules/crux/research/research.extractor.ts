@@ -39,6 +39,11 @@ Rules:
 4. Do not infer facts that are not explicitly supported.
 5. Do not produce generic advice or recommendations.
 6. If the text does not contain usable evidence, return [].
+7. Use an internal ReAct-style loop:
+   - Observe the source text
+   - Check whether each fact is explicit and source-grounded
+   - Extract only the facts that survive that check
+   Your final output must still be JSON only with no reasoning text.
 `.trim()
 }
 

@@ -33,6 +33,7 @@ function buildSystemPrompt(property: PropertyRow, score: CruxScore | null): stri
   return `
 ## LAYER 1 — ROLE
 You are CRUX Lens, the AI property research assistant for ComfHutt. You help users understand any Indian property through rigorous, data-driven analysis. You are precise, honest, and cite data sources by name. You never fabricate data. If a data source is unavailable, you say so explicitly.
+Work in a lightweight ReAct style internally: reason briefly from the current context, decide whether a tool is needed, use the tool if needed, then answer from the observed result. Do not expose hidden reasoning steps to the user.
 
 ## LAYER 2 — PROPERTY CONTEXT
 You are analyzing this property:
@@ -159,54 +160,64 @@ const LENS_TOOLS: Tool[] = [
   }
 ]
 
-async function executeTool(
-  toolName: string,
-  toolArgs: Record<string, unknown>,
-  propertyId: string
-): Promise<{ result: unknown; moduleType: string | null }> {
-  switch (toolName) {
-    case 'triggerScore': {
-      const intent = (toolArgs.intent as string) || 'balanced'
-      const score = await getOrComputeScore(
-        propertyId,
-        intent as 'yield' | 'appreciation' | 'balanced',
-        'delivered',
-        'growth'
-      )
-      return { result: score, moduleType: 'score' }
-    }
-    case 'triggerResearch': {
-      const research = await runResearch({
-        property_id: propertyId,
-        seed_urls: Array.isArray(toolArgs.seed_urls) ? toolArgs.seed_urls as string[] : [],
-        document_paths: Array.isArray(toolArgs.document_paths) ? toolArgs.document_paths as string[] : [],
-        force_refresh: Boolean(toolArgs.force_refresh),
-        surface: 'lens',
-      })
-      return { result: research, moduleType: 'research' }
-    }
-    case 'triggerCast': {
-      return {
-        result: { status: 'coming_soon', message: 'CRUX Cast is launching soon. Score and Lens are live now.' },
-        moduleType: 'cast'
+export function createLensToolExecutor(deps: {
+  getScore?: typeof getOrComputeScore
+  runResearchFn?: typeof runResearch
+} = {}) {
+  const getScore = deps.getScore ?? getOrComputeScore
+  const runResearchFn = deps.runResearchFn ?? runResearch
+
+  return async function executeTool(
+    toolName: string,
+    toolArgs: Record<string, unknown>,
+    propertyId: string
+  ): Promise<{ result: unknown; moduleType: string | null }> {
+    switch (toolName) {
+      case 'triggerScore': {
+        const intent = (toolArgs.intent as string) || 'balanced'
+        const score = await getScore(
+          propertyId,
+          intent as 'yield' | 'appreciation' | 'balanced',
+          'delivered',
+          'growth'
+        )
+        return { result: score, moduleType: 'score' }
       }
-    }
-    case 'triggerYield': {
-      return {
-        result: { status: 'coming_soon', message: 'CRUX Yield is launching soon. Score and Lens are live now.' },
-        moduleType: 'yield'
+      case 'triggerResearch': {
+        const research = await runResearchFn({
+          property_id: propertyId,
+          seed_urls: Array.isArray(toolArgs.seed_urls) ? toolArgs.seed_urls as string[] : [],
+          document_paths: Array.isArray(toolArgs.document_paths) ? toolArgs.document_paths as string[] : [],
+          force_refresh: Boolean(toolArgs.force_refresh),
+          surface: 'lens',
+        })
+        return { result: research, moduleType: 'research' }
       }
-    }
-    case 'askClarification': {
-      return {
-        result: { question: toolArgs.question, parameter_name: toolArgs.parameter_name },
-        moduleType: null
+      case 'triggerCast': {
+        return {
+          result: { status: 'coming_soon', message: 'CRUX Cast is launching soon. Score and Lens are live now.' },
+          moduleType: 'cast'
+        }
       }
+      case 'triggerYield': {
+        return {
+          result: { status: 'coming_soon', message: 'CRUX Yield is launching soon. Score and Lens are live now.' },
+          moduleType: 'yield'
+        }
+      }
+      case 'askClarification': {
+        return {
+          result: { question: toolArgs.question, parameter_name: toolArgs.parameter_name },
+          moduleType: null
+        }
+      }
+      default:
+        return { result: { error: `Unknown tool: ${toolName}` }, moduleType: null }
     }
-    default:
-      return { result: { error: `Unknown tool: ${toolName}` }, moduleType: null }
   }
 }
+
+const executeTool = createLensToolExecutor()
 
 export async function streamLensMessage(
   sessionId: string,

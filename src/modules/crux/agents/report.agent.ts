@@ -28,6 +28,7 @@ STRICT RULES — follow without exception:
 5. ALWAYS write in plain English a non-expert Indian investor can understand. No jargon.
 6. ALWAYS structure your response as valid JSON matching the schema provided.
 7. NEVER include the SEBI disclaimer in your output — it is appended separately by the system.
+8. Use a quiet ReAct-style process internally: inspect the score and evidence, check for gaps or contradictions, then write the final JSON. Never output the internal reasoning.
 
 Tone: professional, direct, honest. Like a knowledgeable friend who happens to understand property data — not a salesperson, not a lawyer.
 `.trim()
@@ -105,6 +106,39 @@ Rules for risk_flags and positive_signals:
 - If confidence is below 0.5, include a risk flag noting data gaps
 - research_highlights may be empty if no accepted research evidence exists
 `.trim()
+}
+
+export function buildReportRow(params: {
+  propertyId: string
+  scoreId: string
+  intent: string
+  parsed: {
+    summary: string
+    category_narratives: CruxReportRow['category_narratives']
+    risk_flags: string[]
+    positive_signals: string[]
+    research_highlights?: string[]
+  }
+  research: Awaited<ReturnType<typeof getLatestResearch>>
+  cruxVersion: string
+}): Omit<CruxReportRow, 'id'> {
+  return {
+    property_id: params.propertyId,
+    score_id: params.scoreId,
+    intent_profile: params.intent,
+    summary: params.parsed.summary,
+    category_narratives: params.parsed.category_narratives,
+    risk_flags: params.parsed.risk_flags.slice(0, 5),
+    positive_signals: params.parsed.positive_signals.slice(0, 5),
+    research_highlights: Array.isArray(params.parsed.research_highlights)
+      ? params.parsed.research_highlights.slice(0, 5)
+      : buildResearchHighlights(params.research?.digest ?? null),
+    citations: buildResearchCitations(params.research?.digest ?? null),
+    sebi_disclaimer: SEBI_DISCLAIMER,
+    crux_version: params.cruxVersion,
+    generated_at: new Date().toISOString(),
+    ttl_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  }
 }
 
 export async function generateReport(propertyId: string, intent: string = 'balanced'): Promise<CruxReportRow> {
@@ -199,23 +233,14 @@ export async function generateReport(propertyId: string, intent: string = 'balan
   }
 
   // 8. Assemble final report row
-  const reportData: Omit<CruxReportRow, 'id'> = {
-    property_id: propertyId,
-    score_id: score.id ?? '',
-    intent_profile: intent,
-    summary: parsed.summary,
-    category_narratives: parsed.category_narratives,
-    risk_flags: parsed.risk_flags.slice(0, 5),
-    positive_signals: parsed.positive_signals.slice(0, 5),
-    research_highlights: Array.isArray(parsed.research_highlights)
-      ? parsed.research_highlights.slice(0, 5)
-      : buildResearchHighlights(research?.digest ?? null),
-    citations: buildResearchCitations(research?.digest ?? null),
-    sebi_disclaimer: SEBI_DISCLAIMER,
-    crux_version: score.crux_version,
-    generated_at: new Date().toISOString(),
-    ttl_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-  }
+  const reportData = buildReportRow({
+    propertyId,
+    scoreId: score.id ?? '',
+    intent,
+    parsed,
+    research,
+    cruxVersion: score.crux_version,
+  })
 
   // 9. Save to cache
   const saved = await saveReport(reportData)

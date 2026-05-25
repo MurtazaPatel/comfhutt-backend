@@ -481,29 +481,428 @@
       "CruxReportResponse": {
         "type": "object",
         "required": [
-          "reportId",
-          "scoreId",
-          "sections",
-          "generatedAt"
+          "id",
+          "property_id",
+          "score_id",
+          "intent_profile",
+          "summary",
+          "category_narratives",
+          "risk_flags",
+          "positive_signals",
+          "research_highlights",
+          "citations",
+          "sebi_disclaimer",
+          "crux_version",
+          "generated_at",
+          "ttl_expires_at"
         ],
         "properties": {
-          "reportId": {
+          "id": {
             "type": "string"
           },
-          "scoreId": {
+          "property_id": {
             "type": "string"
           },
-          "sections": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReportSection"
+          "score_id": {
+            "type": "string"
+          },
+          "intent_profile": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "category_narratives": {
+            "type": "object",
+            "required": [
+              "legal_title",
+              "location_quality",
+              "developer_reliability",
+              "market_valuation",
+              "demand_signals"
+            ],
+            "properties": {
+              "legal_title": {
+                "type": "string"
+              },
+              "location_quality": {
+                "type": "string"
+              },
+              "developer_reliability": {
+                "type": "string"
+              },
+              "market_valuation": {
+                "type": "string"
+              },
+              "demand_signals": {
+                "type": "string"
+              }
             }
           },
-          "generatedAt": {
+          "risk_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "positive_signals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "research_highlights": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResearchCitation"
+            }
+          },
+          "sebi_disclaimer": {
             "type": "string"
           },
-          "downloadUrl": {
+          "crux_version": {
             "type": "string"
+          },
+          "generated_at": {
+            "type": "string"
+          },
+          "ttl_expires_at": {
+            "type": "string"
+          }
+        }
+      },
+      "ResearchCitation": {
+        "type": "object",
+        "required": [
+          "claim",
+          "source_title",
+          "source_url_or_path",
+          "authority_tier",
+          "observed_at"
+        ],
+        "properties": {
+          "claim": {
+            "type": "string"
+          },
+          "source_title": {
+            "type": "string"
+          },
+          "source_url_or_path": {
+            "type": "string"
+          },
+          "authority_tier": {
+            "type": "string",
+            "enum": [
+              "official",
+              "primary",
+              "secondary",
+              "unknown"
+            ]
+          },
+          "observed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ResearchEvidenceItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "property_id",
+          "domain",
+          "source_kind",
+          "authority_tier",
+          "status",
+          "claim_text",
+          "normalized_claim",
+          "source_title",
+          "excerpt",
+          "confidence",
+          "claim_hash",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "property_id": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "property",
+              "developer",
+              "locality",
+              "market",
+              "legal",
+              "environment"
+            ]
+          },
+          "source_kind": {
+            "type": "string",
+            "enum": [
+              "web",
+              "document"
+            ]
+          },
+          "authority_tier": {
+            "type": "string",
+            "enum": [
+              "official",
+              "primary",
+              "secondary",
+              "unknown"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "weak",
+              "rejected"
+            ]
+          },
+          "claim_text": {
+            "type": "string"
+          },
+          "normalized_claim": {
+            "type": "object"
+          },
+          "source_title": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "excerpt": {
+            "type": "string"
+          },
+          "observed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "freshness_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "rejection_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "claim_hash": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        }
+      },
+      "ResearchEvidenceDigest": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "status",
+          "accepted_count",
+          "weak_count",
+          "rejected_count",
+          "accepted_items",
+          "weak_items"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "success",
+              "partial_failed",
+              "failed"
+            ]
+          },
+          "accepted_count": {
+            "type": "number"
+          },
+          "weak_count": {
+            "type": "number"
+          },
+          "rejected_count": {
+            "type": "number"
+          },
+          "accepted_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResearchEvidenceItem"
+            }
+          },
+          "weak_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResearchEvidenceItem"
+            }
+          }
+        }
+      },
+      "ResearchRun": {
+        "type": "object",
+        "required": [
+          "id",
+          "property_id",
+          "status",
+          "initiated_by_surface",
+          "provider",
+          "seed_urls",
+          "document_paths",
+          "summary_counts",
+          "started_at",
+          "ttl_expires_at",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "property_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "success",
+              "partial_failed",
+              "failed"
+            ]
+          },
+          "initiated_by_surface": {
+            "type": "string",
+            "enum": [
+              "api",
+              "lens",
+              "report"
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "tavily"
+            ]
+          },
+          "seed_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "document_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary_counts": {
+            "type": "object"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ttl_expires_at": {
+            "type": "string"
+          },
+          "last_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          }
+        }
+      },
+      "ResearchRequest": {
+        "type": "object",
+        "properties": {
+          "seed_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "document_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "force_refresh": {
+            "type": "boolean"
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "api",
+              "lens",
+              "report"
+            ]
+          }
+        }
+      },
+      "ResearchRunResponse": {
+        "type": "object",
+        "required": [
+          "run",
+          "digest",
+          "reused_cache"
+        ],
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/ResearchRun"
+          },
+          "digest": {
+            "$ref": "#/components/schemas/ResearchEvidenceDigest"
+          },
+          "reused_cache": {
+            "type": "boolean"
           }
         }
       },
@@ -705,17 +1104,17 @@
         }
       }
     },
-    "/crux/report/{scoreId}": {
+    "/crux/report/{property_id}": {
       "get": {
         "operationId": "getReport",
         "tags": [
           "CRUX"
         ],
-        "summary": "Get full CRUX report for a score",
+        "summary": "Get full CRUX report for a property",
         "parameters": [
           {
             "in": "path",
-            "name": "scoreId",
+            "name": "property_id",
             "required": true,
             "schema": {
               "type": "string"
@@ -731,6 +1130,86 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/crux/research/{property_id}": {
+      "get": {
+        "operationId": "getResearch",
+        "tags": [
+          "CRUX"
+        ],
+        "summary": "Get the latest research run and accepted evidence for a property",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "property_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchRunResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "No research run found"
+          }
+        }
+      },
+      "post": {
+        "operationId": "runResearch",
+        "tags": [
+          "CRUX"
+        ],
+        "summary": "Run or refresh research evidence for a property",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "property_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         }
       }

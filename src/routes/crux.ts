@@ -268,7 +268,7 @@ router.post('/crux/lens/session',
       }
 
       const { userId } = getAuth(req)
-      const session = await createSession(property_id, userId);
+      const session = await createSession(property_id, userId ?? undefined);
 
       res.json({
         success: true,
