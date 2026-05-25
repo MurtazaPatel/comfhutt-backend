@@ -40,6 +40,11 @@ export const ResearchRequestSchema = z.object({
   surface: z.enum(['api', 'lens', 'report']).optional(),
 })
 
+export const VerificationRequestSchema = z.object({
+  force_refresh: z.boolean().optional(),
+  surface: z.enum(['api', 'lens', 'report']).optional(),
+})
+
 // ── Middleware factories ──────────────────────────────────────────
 
 export function validateBody<T>(schema: z.ZodSchema<T>) {

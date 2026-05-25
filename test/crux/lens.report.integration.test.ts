@@ -47,7 +47,50 @@ test('Lens triggerResearch emits a research module result', async () => {
   assert.equal(result.moduleType, 'research')
 })
 
-test('buildReportRow includes research highlights and citations when evidence exists', () => {
+test('Lens triggerVerification emits a verification module result', async () => {
+  const executeTool = createLensToolExecutor({
+    runVerificationFn: async () => ({
+      run: {
+        id: 'verification-run-1',
+        property_id: 'property-1',
+        research_run_id: 'run-1',
+        status: 'success',
+        initiated_by_surface: 'lens',
+        summary_counts: {
+          evidence_items_considered: 1,
+          verified_count: 1,
+          contradicted_count: 0,
+          inconclusive_count: 0,
+          stale_count: 0,
+        },
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        ttl_expires_at: new Date().toISOString(),
+        last_error: null,
+        created_at: new Date().toISOString(),
+      },
+      digest: {
+        run_id: 'verification-run-1',
+        research_run_id: 'run-1',
+        status: 'success',
+        verified_count: 1,
+        contradicted_count: 0,
+        inconclusive_count: 0,
+        stale_count: 0,
+        verified_items: [],
+        contradicted_items: [],
+        inconclusive_items: [],
+        stale_items: [],
+      },
+      reused_cache: false,
+    }),
+  })
+
+  const result = await executeTool('triggerVerification', { force_refresh: true }, 'property-1')
+  assert.equal(result.moduleType, 'verification')
+})
+
+test('buildReportRow prefers verification highlights and citations when verification exists', () => {
   const report = buildReportRow({
     propertyId: 'property-1',
     scoreId: 'score-1',
@@ -118,6 +161,80 @@ test('buildReportRow includes research highlights and citations when evidence ex
           created_at: new Date().toISOString(),
         }],
         weak_items: [],
+      },
+      reused_cache: false,
+    },
+    verification: {
+      run: {
+        id: 'verification-run-1',
+        property_id: 'property-1',
+        research_run_id: 'run-1',
+        status: 'success',
+        initiated_by_surface: 'report',
+        summary_counts: {
+          evidence_items_considered: 1,
+          verified_count: 1,
+          contradicted_count: 0,
+          inconclusive_count: 0,
+          stale_count: 0,
+        },
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        ttl_expires_at: new Date().toISOString(),
+        last_error: null,
+        created_at: new Date().toISOString(),
+      },
+      digest: {
+        run_id: 'verification-run-1',
+        research_run_id: 'run-1',
+        status: 'success',
+        verified_count: 1,
+        contradicted_count: 0,
+        inconclusive_count: 0,
+        stale_count: 0,
+        verified_items: [{
+          evidence: {
+            id: 'e-1',
+            run_id: 'run-1',
+            property_id: 'property-1',
+            domain: 'legal',
+            source_kind: 'web',
+            authority_tier: 'official',
+            status: 'accepted',
+            claim_text: 'The official filing shows an active registration.',
+            normalized_claim: { registration_status: 'active' },
+            source_title: 'Official filing',
+            source_url: 'https://maharera.maharashtra.gov.in/project/123',
+            source_path: null,
+            excerpt: 'The official filing shows an active registration.',
+            observed_at: '2026-05-01T00:00:00.000Z',
+            freshness_expires_at: '2027-05-01T00:00:00.000Z',
+            confidence: 0.9,
+            rejection_reason: null,
+            claim_hash: 'hash-1',
+            created_at: new Date().toISOString(),
+          },
+          verification: {
+            id: 'verification-1',
+            run_id: 'verification-run-1',
+            property_id: 'property-1',
+            research_run_id: 'run-1',
+            evidence_item_id: 'e-1',
+            verification_status: 'verified',
+            verifier_confidence: 0.93,
+            direct_match: true,
+            freshness_ok: true,
+            support_score: 0.88,
+            contradiction_score: 0.04,
+            supporting_evidence_ids: [],
+            contradicting_evidence_ids: [],
+            verification_notes: null,
+            created_at: new Date().toISOString(),
+          },
+        }],
+        contradicted_items: [],
+        inconclusive_items: [],
+        stale_items: [],
       },
       reused_cache: false,
     },

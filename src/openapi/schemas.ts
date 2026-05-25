@@ -295,6 +295,85 @@ export const components = {
         reused_cache: { type: 'boolean' },
       },
     },
+    EvidenceVerification: {
+      type: 'object',
+      required: ['id', 'run_id', 'property_id', 'research_run_id', 'evidence_item_id', 'verification_status', 'verifier_confidence', 'direct_match', 'freshness_ok', 'support_score', 'contradiction_score', 'supporting_evidence_ids', 'contradicting_evidence_ids', 'created_at'],
+      properties: {
+        id: { type: 'string' },
+        run_id: { type: 'string' },
+        property_id: { type: 'string' },
+        research_run_id: { type: 'string' },
+        evidence_item_id: { type: 'string' },
+        verification_status: { type: 'string', enum: ['verified', 'contradicted', 'inconclusive', 'stale'] },
+        verifier_confidence: { type: 'number' },
+        direct_match: { type: 'boolean' },
+        freshness_ok: { type: 'boolean' },
+        support_score: { type: 'number' },
+        contradiction_score: { type: 'number' },
+        supporting_evidence_ids: { type: 'array', items: { type: 'string' } },
+        contradicting_evidence_ids: { type: 'array', items: { type: 'string' } },
+        verification_notes: { type: ['string', 'null'] },
+        created_at: { type: 'string' },
+      },
+    },
+    VerifiedEvidenceItem: {
+      type: 'object',
+      required: ['evidence', 'verification'],
+      properties: {
+        evidence: { $ref: '#/components/schemas/ResearchEvidenceItem' },
+        verification: { $ref: '#/components/schemas/EvidenceVerification' },
+      },
+    },
+    VerificationDigest: {
+      type: 'object',
+      required: ['run_id', 'research_run_id', 'status', 'verified_count', 'contradicted_count', 'inconclusive_count', 'stale_count', 'verified_items', 'contradicted_items', 'inconclusive_items', 'stale_items'],
+      properties: {
+        run_id: { type: 'string' },
+        research_run_id: { type: 'string' },
+        status: { type: 'string', enum: ['running', 'success', 'partial_failed', 'failed'] },
+        verified_count: { type: 'number' },
+        contradicted_count: { type: 'number' },
+        inconclusive_count: { type: 'number' },
+        stale_count: { type: 'number' },
+        verified_items: { type: 'array', items: { $ref: '#/components/schemas/VerifiedEvidenceItem' } },
+        contradicted_items: { type: 'array', items: { $ref: '#/components/schemas/VerifiedEvidenceItem' } },
+        inconclusive_items: { type: 'array', items: { $ref: '#/components/schemas/VerifiedEvidenceItem' } },
+        stale_items: { type: 'array', items: { $ref: '#/components/schemas/VerifiedEvidenceItem' } },
+      },
+    },
+    VerificationRun: {
+      type: 'object',
+      required: ['id', 'property_id', 'research_run_id', 'status', 'initiated_by_surface', 'summary_counts', 'started_at', 'ttl_expires_at', 'created_at'],
+      properties: {
+        id: { type: 'string' },
+        property_id: { type: 'string' },
+        research_run_id: { type: 'string' },
+        status: { type: 'string', enum: ['running', 'success', 'partial_failed', 'failed'] },
+        initiated_by_surface: { type: 'string', enum: ['api', 'lens', 'report'] },
+        summary_counts: { type: 'object' },
+        started_at: { type: 'string' },
+        completed_at: { type: ['string', 'null'] },
+        ttl_expires_at: { type: 'string' },
+        last_error: { type: ['string', 'null'] },
+        created_at: { type: 'string' },
+      },
+    },
+    VerificationRequest: {
+      type: 'object',
+      properties: {
+        force_refresh: { type: 'boolean' },
+        surface: { type: 'string', enum: ['api', 'lens', 'report'] },
+      },
+    },
+    VerificationRunResponse: {
+      type: 'object',
+      required: ['run', 'digest', 'reused_cache'],
+      properties: {
+        run: { $ref: '#/components/schemas/VerificationRun' },
+        digest: { $ref: '#/components/schemas/VerificationDigest' },
+        reused_cache: { type: 'boolean' },
+      },
+    },
     CardShareResponse: {
       type: 'object',
       required: ['shareToken', 'shareUrl', 'ogTitle', 'ogDescription', 'compositeScore', 'propertyAddress', 'expiresAt'],
@@ -501,6 +580,64 @@ export const paths = {
           content: {
             'application/json': {
               schema: { $ref: '#/components/schemas/ResearchRunResponse' },
+            },
+          },
+        },
+        '401': { description: 'Unauthorized' },
+        '400': { description: 'Validation error' },
+      },
+    },
+  },
+  '/crux/verification/{property_id}': {
+    get: {
+      operationId: 'getVerification',
+      tags: ['CRUX'],
+      summary: 'Get the latest verification run and verified evidence for a property',
+      parameters: [
+        {
+          in: 'path',
+          name: 'property_id',
+          required: true,
+          schema: { type: 'string' },
+        },
+      ],
+      responses: {
+        '200': {
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/VerificationRunResponse' },
+            },
+          },
+        },
+        '401': { description: 'Unauthorized' },
+        '404': { description: 'No verification run found' },
+      },
+    },
+    post: {
+      operationId: 'runVerification',
+      tags: ['CRUX'],
+      summary: 'Run or refresh evidence verification for a property',
+      parameters: [
+        {
+          in: 'path',
+          name: 'property_id',
+          required: true,
+          schema: { type: 'string' },
+        },
+      ],
+      requestBody: {
+        required: false,
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/VerificationRequest' },
+          },
+        },
+      },
+      responses: {
+        '200': {
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/VerificationRunResponse' },
             },
           },
         },

@@ -31,6 +31,7 @@
 | `CRUX_RESEARCH_MAX_WEB_RESULTS` | No | Max Tavily results fetched per run. Default: `8` |
 | `CRUX_RESEARCH_MAX_EVIDENCE_ITEMS` | No | Max evidence items persisted per run. Default: `20` |
 | `CRUX_RESEARCH_ALLOWED_DOMAINS` | No | Optional comma-separated allowed domain override for accepted web evidence |
+| `CRUX_VERIFICATION_TTL_HOURS` | No | Cache TTL for verification runs. Default: `24` |
 
 ## Maps (Google)
 

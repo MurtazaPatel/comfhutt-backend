@@ -17,7 +17,7 @@ export type PropertyType =
   | 'commercial_retail'
   | 'plot';
 
-export type AgentType = 'fetcher' | 'scorer' | 'report' | 'lens' | 'research';
+export type AgentType = 'fetcher' | 'scorer' | 'report' | 'lens' | 'research' | 'verification';
 
 // ─── Property ────────────────────────────────────────────────────────────────
 
@@ -262,6 +262,79 @@ export interface ResearchCitation {
   observed_at: string | null;
 }
 
+// ─── Evidence Verification ───────────────────────────────────────────────────
+
+export type VerificationRunStatus = 'running' | 'success' | 'partial_failed' | 'failed';
+
+export type VerificationSurface = 'api' | 'lens' | 'report';
+
+export type VerificationStatus = 'verified' | 'contradicted' | 'inconclusive' | 'stale';
+
+export interface VerificationRunSummary {
+  evidence_items_considered: number;
+  verified_count: number;
+  contradicted_count: number;
+  inconclusive_count: number;
+  stale_count: number;
+}
+
+export interface VerificationRunInput {
+  property_id: string;
+  force_refresh?: boolean;
+  surface?: VerificationSurface;
+}
+
+export interface EvidenceVerificationRow {
+  id: string;
+  run_id: string;
+  property_id: string;
+  research_run_id: string;
+  evidence_item_id: string;
+  verification_status: VerificationStatus;
+  verifier_confidence: number;
+  direct_match: boolean;
+  freshness_ok: boolean;
+  support_score: number;
+  contradiction_score: number;
+  supporting_evidence_ids: string[];
+  contradicting_evidence_ids: string[];
+  verification_notes: string | null;
+  created_at: string;
+}
+
+export interface VerificationRunRow {
+  id: string;
+  property_id: string;
+  research_run_id: string;
+  status: VerificationRunStatus;
+  initiated_by_surface: VerificationSurface;
+  summary_counts: VerificationRunSummary;
+  started_at: string;
+  completed_at: string | null;
+  ttl_expires_at: string;
+  last_error: string | null;
+  created_at: string;
+}
+
+export interface VerifiedEvidenceItem {
+  evidence: EvidenceItem;
+  verification: EvidenceVerificationRow;
+}
+
+export interface VerificationDigest {
+  run_id: string;
+  research_run_id: string;
+  status: VerificationRunStatus;
+  verified_count: number;
+  contradicted_count: number;
+  inconclusive_count: number;
+  stale_count: number;
+  verified_items: VerifiedEvidenceItem[];
+  contradicted_items: VerifiedEvidenceItem[];
+  inconclusive_items: VerifiedEvidenceItem[];
+  stale_items: VerifiedEvidenceItem[];
+}
+
 // ─── Clarification (agent → user via Lens) ────────────────────────────────────
 
 export interface ClarificationRequest {
@@ -417,8 +490,8 @@ export interface SseChunk {
 }
 
 export interface LensModuleResult {
-  type: 'score' | 'report' | 'research';
-  data: CruxScore | CruxReport | ResearchEvidenceDigest;
+  type: 'score' | 'report' | 'research' | 'verification';
+  data: CruxScore | CruxReport | ResearchEvidenceDigest | VerificationDigest;
 }
 
 // ─── User Dashboard ───────────────────────────────────────────────────────────

@@ -48,6 +48,8 @@ interface EnvConfig {
   CRUX_RESEARCH_MAX_EVIDENCE_ITEMS: number;
   /** Optional comma-separated allowed domains override */
   CRUX_RESEARCH_ALLOWED_DOMAINS: string[];
+  /** Verification cache TTL in hours */
+  CRUX_VERIFICATION_TTL_HOURS: number;
 }
 
 function requireEnv(key: string): string {
@@ -82,6 +84,7 @@ export const env: EnvConfig = {
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean),
+  CRUX_VERIFICATION_TTL_HOURS: parseInt(process.env.CRUX_VERIFICATION_TTL_HOURS || "24", 10),
 };
 
 // CRUX Data Source URLs (defaults to public government endpoints)

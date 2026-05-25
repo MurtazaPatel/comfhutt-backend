@@ -10,6 +10,7 @@ import { getOrComputeScore, forceRecomputeScore } from '../modules/crux/scoring'
 import { streamLensMessage } from '../modules/crux/agents/lens.agent'
 import { generateReport } from '../modules/crux/agents/report.agent';
 import { getLatestResearch, runResearch } from '../modules/crux/agents/research.agent';
+import { getLatestVerification, runVerification } from '../modules/crux/agents/verification.agent';
 import { createSession, getSession, getMessageHistory } from '../modules/crux/lens/lens.service';
 import { generateCard } from '../modules/crux/card/card.generator';
 import { getCardByToken } from '../modules/crux/card/card.service';
@@ -22,6 +23,7 @@ import {
   LensSessionSchema,
   LensMessageSchema,
   ResearchRequestSchema,
+  VerificationRequestSchema,
   UUIDSchema,
   ShareTokenSchema,
 } from '../middleware/validation.middleware';
@@ -338,6 +340,50 @@ router.get('/crux/research/:property_id',
         success: true,
         data: result,
       })
+    } catch (err) {
+      next(err)
+    }
+  })
+
+router.post('/crux/verification/:property_id',
+  requireAuth,
+  validateParam('property_id', UUIDSchema),
+  validateBody(VerificationRequestSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const rawId = req.params.property_id
+      const property_id = Array.isArray(rawId) ? (rawId[0] ?? '') : rawId
+      const body = req.body as {
+        force_refresh?: boolean
+        surface?: 'api' | 'lens' | 'report'
+      }
+
+      const result = await runVerification({
+        property_id,
+        force_refresh: body.force_refresh,
+        surface: body.surface ?? 'api',
+      })
+
+      res.status(200).json({ success: true, data: result })
+    } catch (err) {
+      next(err)
+    }
+  })
+
+router.get('/crux/verification/:property_id',
+  requireAuth,
+  validateParam('property_id', UUIDSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const rawId = req.params.property_id
+      const property_id = Array.isArray(rawId) ? (rawId[0] ?? '') : rawId
+      const result = await getLatestVerification(property_id)
+
+      if (!result) {
+        throw new AppError(404, 'VERIFICATION_NOT_FOUND', 'No verification run found for this property.')
+      }
+
+      res.status(200).json({ success: true, data: result })
     } catch (err) {
       next(err)
     }

@@ -5,6 +5,8 @@ import { getOrComputeScore } from '../scoring'
 import { getCachedReport, saveReport, CruxReportRow } from '../report/report.service'
 import { getLatestResearch } from './research.agent'
 import { buildResearchCitations, buildResearchContextBlock, buildResearchHighlights } from '../research'
+import { getLatestVerification } from './verification.agent'
+import { buildVerificationCitations, buildVerificationContextBlock, buildVerificationHighlights } from '../verification'
 import type { IntentProfile, LifecycleStage, MacroCycle } from '../shared/types'
 
 const SEBI_DISCLAIMER =
@@ -52,7 +54,8 @@ function buildReportUserPrompt(
     lifecycle_stage: string
     macro_cycle: string
   },
-  researchContext: string
+  researchContext: string,
+  verificationContext: string
 ): string {
   return `
 Generate a CRUX property analysis report for the following property and score data.
@@ -72,6 +75,9 @@ CRUX SCORE DATA:
 
 RESEARCH EVIDENCE:
 ${researchContext}
+
+VERIFICATION LAYER:
+${verificationContext}
 
 Respond ONLY with a valid JSON object matching this exact schema — no preamble, no markdown fences:
 {
@@ -120,6 +126,7 @@ export function buildReportRow(params: {
     research_highlights?: string[]
   }
   research: Awaited<ReturnType<typeof getLatestResearch>>
+  verification: Awaited<ReturnType<typeof getLatestVerification>>
   cruxVersion: string
 }): Omit<CruxReportRow, 'id'> {
   return {
@@ -132,8 +139,14 @@ export function buildReportRow(params: {
     positive_signals: params.parsed.positive_signals.slice(0, 5),
     research_highlights: Array.isArray(params.parsed.research_highlights)
       ? params.parsed.research_highlights.slice(0, 5)
-      : buildResearchHighlights(params.research?.digest ?? null),
-    citations: buildResearchCitations(params.research?.digest ?? null),
+      : (
+          params.verification
+            ? buildVerificationHighlights(params.verification.digest)
+            : buildResearchHighlights(params.research?.digest ?? null)
+        ),
+    citations: params.verification
+      ? buildVerificationCitations(params.verification.digest)
+      : buildResearchCitations(params.research?.digest ?? null),
     sebi_disclaimer: SEBI_DISCLAIMER,
     crux_version: params.cruxVersion,
     generated_at: new Date().toISOString(),
@@ -169,6 +182,8 @@ export async function generateReport(propertyId: string, intent: string = 'balan
 
   const research = await getLatestResearch(propertyId)
   const researchContext = buildResearchContextBlock(research?.digest ?? null)
+  const verification = await getLatestVerification(propertyId)
+  const verificationContext = buildVerificationContextBlock(verification?.digest ?? null)
 
   // 4. Build prompts
   const systemPrompt = buildReportSystemPrompt()
@@ -191,6 +206,7 @@ export async function generateReport(propertyId: string, intent: string = 'balan
       macro_cycle: score.macro_cycle ?? 'growth',
     },
     researchContext,
+    verificationContext,
   )
 
   // 5. Call Gemini — non-streaming, JSON output
@@ -239,6 +255,7 @@ export async function generateReport(propertyId: string, intent: string = 'balan
     intent,
     parsed,
     research,
+    verification,
     cruxVersion: score.crux_version,
   })
 
@@ -249,7 +266,12 @@ export async function generateReport(propertyId: string, intent: string = 'balan
   supabase.from('crux_agent_logs').insert({
     agent_type: 'report',
     property_id: propertyId,
-    input_payload: { intent, score_composite: score.score_composite, research_accepted: research?.digest.accepted_count ?? 0 },
+    input_payload: {
+      intent,
+      score_composite: score.score_composite,
+      research_accepted: research?.digest.accepted_count ?? 0,
+      verification_verified: verification?.digest.verified_count ?? 0,
+    },
     output_payload: {
       risk_flags: saved.risk_flags.length,
       positive_signals: saved.positive_signals.length,

@@ -13,6 +13,8 @@ import {
 import { getOrComputeScore } from '../scoring'
 import { getLatestResearch, runResearch } from './research.agent'
 import { buildResearchContextBlock } from '../research'
+import { getLatestVerification, runVerification } from './verification.agent'
+import { buildVerificationContextBlock } from '../verification'
 import type { CruxScore } from '../shared/types'
 
 interface PropertyRow {
@@ -27,6 +29,7 @@ interface PropertyRow {
   property_type: string | null
   approx_size_sqft: number | null
   research_context?: string
+  verification_context?: string
 }
 
 function buildSystemPrompt(property: PropertyRow, score: CruxScore | null): string {
@@ -62,10 +65,14 @@ No CRUX Score has been computed for this property yet. If the user asks about th
 ## LAYER 3B — RESEARCH EVIDENCE CONTEXT
 ${property.research_context ?? 'No research evidence is cached for this property yet. Use triggerResearch when the user wants deeper evidence-backed research.'}
 
+## LAYER 3C — VERIFICATION CONTEXT
+${property.verification_context ?? 'No verification run is cached for this property yet. Use triggerVerification when the user wants confirmed or contradicted evidence.'}
+
 ## LAYER 4 — AVAILABLE TOOLS
 You have access to these functions to assist users:
 - triggerScore: Compute or refresh the CRUX Score for this property
 - triggerResearch: Run or refresh CRUX Research evidence for this property
+- triggerVerification: Verify the current research evidence for this property
 - triggerCast: Get CRUX Cast (AI property valuation — fair market value range)
 - triggerYield: Get CRUX Yield (rental income estimate and yield percentage)
 - askClarification: Ask the user for a missing data point that would improve scoring accuracy
@@ -121,6 +128,20 @@ const LENS_TOOLS: Tool[] = [
         }
       },
       {
+        name: 'triggerVerification',
+        description: 'Run or refresh CRUX Verification for the current property. Use when the user wants confirmed evidence, contradiction checks, or higher-confidence grounded analysis.',
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            force_refresh: {
+              type: SchemaType.BOOLEAN,
+              description: 'Whether to bypass the current verification cache'
+            }
+          },
+          required: []
+        }
+      },
+      {
         name: 'triggerCast',
         description: 'Get CRUX Cast — AI-powered property valuation using 3-method triangulation (Income Capitalization, Sales Comparable, Replacement Cost). Use when user asks about fair value, market price, or property worth.',
         parameters: {
@@ -163,9 +184,11 @@ const LENS_TOOLS: Tool[] = [
 export function createLensToolExecutor(deps: {
   getScore?: typeof getOrComputeScore
   runResearchFn?: typeof runResearch
+  runVerificationFn?: typeof runVerification
 } = {}) {
   const getScore = deps.getScore ?? getOrComputeScore
   const runResearchFn = deps.runResearchFn ?? runResearch
+  const runVerificationFn = deps.runVerificationFn ?? runVerification
 
   return async function executeTool(
     toolName: string,
@@ -192,6 +215,14 @@ export function createLensToolExecutor(deps: {
           surface: 'lens',
         })
         return { result: research, moduleType: 'research' }
+      }
+      case 'triggerVerification': {
+        const verification = await runVerificationFn({
+          property_id: propertyId,
+          force_refresh: Boolean(toolArgs.force_refresh),
+          surface: 'lens',
+        })
+        return { result: verification, moduleType: 'verification' }
       }
       case 'triggerCast': {
         return {
@@ -251,7 +282,7 @@ export async function streamLensMessage(
     await checkMessageLimit(sessionId)
     await refreshSession(sessionId)
 
-    const [propertyResult, scoreResult, researchResult] = await Promise.allSettled([
+    const [propertyResult, scoreResult, researchResult, verificationResult] = await Promise.allSettled([
       supabase
         .from('crux_properties')
         .select('*')
@@ -264,12 +295,14 @@ export async function streamLensMessage(
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
-      getLatestResearch(session.property_id)
+      getLatestResearch(session.property_id),
+      getLatestVerification(session.property_id),
     ])
 
     const property = propertyResult.status === 'fulfilled' ? propertyResult.value.data : null
     const score = scoreResult.status === 'fulfilled' ? scoreResult.value.data : null
     const research = researchResult.status === 'fulfilled' ? researchResult.value : null
+    const verification = verificationResult.status === 'fulfilled' ? verificationResult.value : null
 
     if (!property) {
       throw new AppError(404, 'PROPERTY_NOT_FOUND', 'Property not found for this session.')
@@ -280,6 +313,7 @@ export async function streamLensMessage(
     const systemPrompt = buildSystemPrompt({
       ...(property as PropertyRow),
       research_context: buildResearchContextBlock(research?.digest ?? null),
+      verification_context: buildVerificationContextBlock(verification?.digest ?? null),
     }, score as CruxScore | null)
 
     const contents: Content[] = [

@@ -17,6 +17,7 @@ export const GEMINI_MODELS = {
   LENS: 'gemini-2.5-flash',      // streaming chat
   FETCHER_AGENT: 'gemini-2.5-flash',  // function-calling data orchestration
   RESEARCH_AGENT: 'gemini-2.5-flash', // grounded evidence extraction
+  VERIFICATION_AGENT: 'gemini-2.5-flash', // evidence verification and contradiction analysis
   SCORING_AGENT: 'gemini-2.5-flash',  // clarification question generation
   REPORT_AGENT: 'gemini-2.5-flash',   // narrative report generation
 } as const;
