@@ -247,23 +247,23 @@ function finalizeVerificationStatus(
   const canVerify = evidence.status === 'accepted' || evidence.status === 'weak'
   const authorityTier = evidence.authority_tier
 
-  if (assessment.verification_status === 'contradicted' || contradictionScore >= 0.70) {
+  if (assessment.verification_status === 'contradicted' || contradictionScore >= 0.85) {
     return 'contradicted'
   }
 
-  if (assessment.verification_status === 'verified' && canVerify && directMatch && contradictionScore < 0.55) {
+  if (assessment.verification_status === 'verified' && canVerify && directMatch && contradictionScore < 0.60) {
     return 'verified'
   }
 
-  if (canVerify && authorityTier === 'secondary' && directMatch && supportScore >= 0.72 && contradictionScore < 0.35) {
+  if (canVerify && authorityTier === 'secondary' && directMatch && supportScore >= 0.60 && contradictionScore < 0.40) {
     return 'verified'
   }
 
-  if (canVerify && (authorityTier === 'official' || authorityTier === 'primary') && directMatch && supportScore >= 0.60 && contradictionScore < 0.50) {
+  if (canVerify && (authorityTier === 'official' || authorityTier === 'primary') && directMatch && supportScore >= 0.50 && contradictionScore < 0.55) {
     return 'verified'
   }
 
-  if (canVerify && (authorityTier === 'unknown') && directMatch && supportScore >= 0.75 && contradictionScore < 0.30) {
+  if (canVerify && (authorityTier === 'unknown') && directMatch && supportScore >= 0.65 && contradictionScore < 0.35) {
     return 'verified'
   }
 

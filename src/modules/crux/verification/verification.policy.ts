@@ -143,9 +143,9 @@ export function computeDeterministicSignals(
   )
 
   const contradiction_score = clamp(
-    contradicting_evidence_ids.length * 0.3
-    + (!direct_match ? 0.1 : 0)
-    + (freshness_ok ? 0 : 0.15),
+    contradicting_evidence_ids.length * 0.15
+    + (!direct_match ? 0.08 : 0)
+    + (freshness_ok ? 0 : 0.10),
   )
 
   return {
