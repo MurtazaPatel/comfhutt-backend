@@ -334,7 +334,7 @@ Weight adjustments should reflect REAL PROPERTY-SPECIFIC information:
       systemInstruction: systemPrompt,
       prompt: userPrompt,
       temperature: 0.1,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 4096,
     })
 
     const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);

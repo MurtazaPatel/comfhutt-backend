@@ -383,7 +383,7 @@ Respond with ONLY a JSON array — no markdown, no explanation.`
       systemInstruction: systemPrompt,
       prompt: userPrompt,
       temperature: 0.7,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 8192,
     })
     const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
     let parsed: unknown
@@ -434,7 +434,7 @@ Respond with ONLY a JSON array — no markdown, no explanation.`
         systemInstruction: systemPrompt,
         prompt: userPrompt,
         temperature: 0.7,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
       })
       const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
       let parsed: unknown

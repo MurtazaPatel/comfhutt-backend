@@ -248,7 +248,7 @@ RULES:
         systemInstruction: systemPrompt,
         prompt: userPrompt,
         temperature: 0.1,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
       })
       const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
 

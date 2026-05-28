@@ -80,11 +80,15 @@ ${params.text}
 
 function recoverJson(text: string): string | null {
   let recovered = text.trim()
-  let openBraces = 0
-  let openBrackets = 0
-  let inString = false
-  let escaped = false
 
+  const lastComma = recovered.lastIndexOf(',')
+  if (lastComma > recovered.length * 0.85) {
+    recovered = recovered.slice(0, lastComma)
+  }
+
+  recovered = recovered.replace(/,\s*$/, '')
+
+  let openBraces = 0, openBrackets = 0, inString = false, escaped = false
   for (let i = 0; i < recovered.length; i++) {
     const ch = recovered[i]
     if (escaped) { escaped = false; continue }
@@ -97,24 +101,23 @@ function recoverJson(text: string): string | null {
     if (ch === ']') openBrackets--
   }
 
-  if (inString) {
-    const lastNewline = recovered.lastIndexOf('\n')
-    if (lastNewline > 0) {
-      recovered = recovered.slice(0, lastNewline) + '"}'
-    } else {
-      recovered += '"'
-    }
-  }
-
+  if (inString) recovered += '"'
   while (openBrackets > 0) { recovered += ']'; openBrackets-- }
   while (openBraces > 0) { recovered += '}'; openBraces-- }
 
-  try {
-    JSON.parse(recovered)
-    return recovered
-  } catch {
-    return null
+  try { JSON.parse(recovered); return recovered } catch { return null }
+}
+
+function tryExtractPartialArray(text: string): unknown[] {
+  const items: unknown[] = []
+  const objectPattern = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g
+  let match
+  while ((match = objectPattern.exec(text)) !== null) {
+    try {
+      items.push(JSON.parse(match[0]))
+    } catch {}
   }
+  return items
 }
 
 export class GeminiResearchExtractor implements ResearchExtractor {
@@ -126,14 +129,14 @@ export class GeminiResearchExtractor implements ResearchExtractor {
     text: string
     observedAt: string | null
   }): Promise<ExtractedEvidenceDraft[]> {
-    for (let attempt = 0; attempt <= 1; attempt++) {
+    for (let attempt = 0; attempt <= 2; attempt++) {
       try {
         const raw = await generateWithFallback({
           model: GEMINI_MODELS.RESEARCH_AGENT,
           systemInstruction: buildSystemPrompt(),
           prompt: buildUserPrompt(params),
-          temperature: 0.2,
-          maxOutputTokens: 4096,
+          temperature: attempt === 0 ? 0.2 : 0.4,
+          maxOutputTokens: 8192,
         })
         const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
 
@@ -143,23 +146,30 @@ export class GeminiResearchExtractor implements ResearchExtractor {
         } catch {
           const recovered = recoverJson(clean)
           if (recovered) {
-            parsed = JSON.parse(recovered)
-          } else {
-            throw new Error('JSON_RECOVERY_FAILED')
+            try { parsed = JSON.parse(recovered) } catch {}
+          }
+          if (!parsed) {
+            const partial = tryExtractPartialArray(clean)
+            if (partial.length > 0) {
+              parsed = partial
+            } else if (attempt < 2) {
+              throw new Error('JSON_RECOVERY_FAILED')
+            } else {
+              return []
+            }
           }
         }
 
         if (!Array.isArray(parsed)) return []
 
         const drafts: ExtractedEvidenceDraft[] = []
-
         for (const item of parsed) {
           if (!item || typeof item !== 'object') continue
           const record = item as Record<string, unknown>
           const domain = typeof record.domain === 'string' ? record.domain : ''
           if (!VALID_DOMAINS.includes(domain as EvidenceDomain)) continue
 
-          drafts.push({
+          const draft: ExtractedEvidenceDraft = {
             domain: domain as EvidenceDomain,
             claim_text: typeof record.claim_text === 'string' ? record.claim_text : '',
             normalized_claim: typeof record.normalized_claim === 'object' && record.normalized_claim
@@ -167,18 +177,18 @@ export class GeminiResearchExtractor implements ResearchExtractor {
               : {},
             observed_at: typeof record.observed_at === 'string' ? record.observed_at : null,
             confidence: typeof record.confidence === 'number' ? record.confidence : 0.5,
-          })
+          }
+          if (draft.claim_text.length >= 10) drafts.push(draft)
         }
 
-        return drafts
+        if (drafts.length > 0) return drafts
+        if (attempt < 2) throw new Error('EMPTY_EXTRACTION')
+        return []
       } catch (error) {
         const msg = (error as Error)?.message?.slice(0, 100) ?? 'unknown'
-        if (attempt === 2) {
-          console.warn(`[extractor] exhausted retries: ${msg}`)
-          return []
-        }
+        if (attempt === 2) { console.warn(`[extractor] exhausted: ${msg}`); return [] }
         const waitMs = 2000 * Math.pow(2, attempt)
-        console.warn(`[extractor] attempt ${attempt + 1} failed, retrying in ${waitMs}ms: ${msg}`)
+        console.warn(`[extractor] attempt ${attempt + 1} failed (${msg}), retrying in ${waitMs}ms`)
         await new Promise(resolve => setTimeout(resolve, waitMs))
       }
     }

@@ -132,7 +132,7 @@ export class GeminiEvidenceVerifier implements EvidenceVerifier {
         systemInstruction: buildSystemPrompt(),
         prompt: buildUserPrompt(params),
         temperature: 0.1,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
       })
       const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
       const parsed = JSON.parse(clean) as Record<string, unknown>
