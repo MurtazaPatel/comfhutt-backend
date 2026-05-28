@@ -180,16 +180,17 @@ export function fetcherOutputToEvidenceItems(
 
   if (output.ecourts.data) {
     const d = output.ecourts.data;
+    const caseTypes = Array.isArray(d.case_types) ? d.case_types : []
     pushDraft(items, createDraft(
       output.ecourts,
       'legal',
       'official',
-      `eCourts search: ${d.cases_found} cases found, ${d.open_cases} open, ${d.closed_cases} closed. Case types: ${d.case_types.join(', ') || 'none'}`,
+      `eCourts search: ${d.cases_found ?? 0} cases found, ${d.open_cases ?? 0} open, ${d.closed_cases ?? 0} closed. Case types: ${caseTypes.join(', ') || 'none'}`,
       {
-        cases_found: d.cases_found,
-        open_cases: d.open_cases,
-        closed_cases: d.closed_cases,
-        case_types: d.case_types,
+        cases_found: d.cases_found ?? 0,
+        open_cases: d.open_cases ?? 0,
+        closed_cases: d.closed_cases ?? 0,
+        case_types: caseTypes,
       },
       'eCourts India',
       'https://ecourts.gov.in/',

@@ -394,7 +394,7 @@ Respond with ONLY a JSON array — no markdown, no explanation.`
       if (recovered) {
         parsed = JSON.parse(recovered)
       } else {
-        throw new Error('JSON_RECOVERY_FAILED')
+        throw new Error('GEMINI_INVALID_JSON')
       }
     }
 
@@ -425,7 +425,47 @@ Respond with ONLY a JSON array — no markdown, no explanation.`
 
     return queries.slice(0, 12)
   } catch (error) {
-    console.warn('[research.policy] Gemini query generation failed, using static queries:', (error as Error)?.message?.slice(0, 100))
+    const errMsg = (error as Error)?.message?.slice(0, 100) ?? 'unknown'
+    console.warn(`[research.policy] Gemini query generation failed (${errMsg}), retrying with Kimi K2.6...`)
+    
+    try {
+      const raw = await generateWithFallback({
+        model: GEMINI_MODELS.RESEARCH_AGENT,
+        systemInstruction: systemPrompt,
+        prompt: userPrompt,
+        temperature: 0.7,
+        maxOutputTokens: 4096,
+      })
+      const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(clean)
+      } catch {
+        const recovered = recoverJson(clean)
+        if (recovered) parsed = JSON.parse(recovered)
+        else throw new Error('KIMI_INVALID_JSON')
+      }
+
+      if (Array.isArray(parsed)) {
+        const queries: ResearchQuery[] = []
+        for (const item of parsed) {
+          if (!item || typeof item !== 'object') continue
+          const record = item as Record<string, unknown>
+          const query = typeof record.query === 'string' ? record.query.trim() : ''
+          if (!query || query.length < 5) continue
+          const tier = typeof record.authority_tier === 'string' && ['official', 'primary', 'secondary'].includes(record.authority_tier)
+            ? record.authority_tier as EvidenceAuthorityTier : 'secondary'
+          queries.push({ query, rationale: typeof record.rationale === 'string' ? record.rationale : '', domain_hint: typeof record.domain_hint === 'string' ? record.domain_hint : null, authority_tier: tier })
+        }
+        if (queries.length > 0) {
+          console.log('[research.policy] Kimi K2.6 generated', queries.length, 'smart queries')
+          return queries.slice(0, 12)
+        }
+      }
+    } catch (kimiError) {
+      console.warn('[research.policy] Kimi K2.6 also failed:', (kimiError as Error)?.message?.slice(0, 100))
+    }
+    
     return buildResearchQueries(property).map(q => ({ query: q, rationale: '', authority_tier: 'secondary' as EvidenceAuthorityTier }))
   }
 }
