@@ -596,7 +596,7 @@ export class ResearchService {
     const sources: ExtractSource[] = []
     for (const [url, metadata] of sourceEntries) {
       const textContent = metadata.raw_content || metadata.snippet || ''
-      if (!textContent || textContent.length < 50) continue
+      if (!textContent || textContent.length < 20) continue
       sources.push({
         source_kind: 'web',
         source_title: metadata.title,

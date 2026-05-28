@@ -4,6 +4,7 @@ import type {
   EvidenceDomain,
   EvidenceAuthorityTier,
   FetcherResult,
+  PropertyProfile,
 } from './types';
 
 interface DraftEvidenceItem {
@@ -95,6 +96,7 @@ function pushDraft(
 export function fetcherOutputToEvidenceItems(
   output: AggregatedFetcherOutput,
   runId: string,
+  profile?: PropertyProfile,
 ): DraftEvidenceItem[] {
   const items: DraftEvidenceItem[] = [];
 
@@ -115,11 +117,13 @@ export function fetcherOutputToEvidenceItems(
 
   if (output.google_maps.data) {
     const d = output.google_maps.data;
+    const city = profile?.city ?? output.property_id
+    const state = profile?.state ?? ''
     pushDraft(items, createDraft(
       output.google_maps,
       'locality',
-      'secondary',
-      `Google Maps locality analysis: ${d.poi_count_500m} points of interest within 500m, commute to CBD approx ${d.commute_minutes_to_cbd ?? 'unknown'} minutes`,
+      'official',
+      `Google Maps locality analysis for ${city}, ${state}: ${d.poi_count_500m} points of interest within 500m, commute to CBD approx ${d.commute_minutes_to_cbd ?? 'unknown'} minutes`,
       {
         poi_count_500m: d.poi_count_500m,
         commute_minutes_to_cbd: d.commute_minutes_to_cbd,

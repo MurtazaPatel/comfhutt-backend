@@ -1,4 +1,4 @@
-import { firecrawlClient } from '../../../lib/firecrawl'
+import { firecrawlClient, firecrawlScrapeBreaker } from '../../../lib/firecrawl'
 import type { PageContent, SearchResult } from '../shared/types'
 
 export interface ResearchWebProvider {
@@ -81,8 +81,11 @@ export class FirecrawlWebProvider implements ResearchWebProvider {
     const scraped = await Promise.all(
       urls.map(async (url) => {
         try {
-          const page = await this.fetchPage(url)
-          return { url, content: page.text_content }
+          const result = await firecrawlScrapeBreaker.fire(url, {
+            formats: ['markdown'],
+            onlyMainContent: true,
+          }) as { success: boolean; data?: { markdown?: string; metadata?: { title?: string } } }
+          return { url, content: result.success && result.data?.markdown ? result.data.markdown : '' }
         } catch {
           return { url, content: '' }
         }

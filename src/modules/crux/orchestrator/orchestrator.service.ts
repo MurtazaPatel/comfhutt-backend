@@ -69,6 +69,7 @@ export async function runUnifiedPipeline(
     const fetcherEvidence = fetcherOutputToEvidenceItems(
       fetcherOutput,
       researchOutput.run.id,
+      property,
     );
     await insertFetcherEvidence(fetcherEvidence);
 
