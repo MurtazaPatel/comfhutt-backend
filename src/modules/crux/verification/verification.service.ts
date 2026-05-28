@@ -157,6 +157,7 @@ class SupabaseVerificationRepository implements VerificationRepository {
       .select('*')
 
     if (error || !data) {
+      console.error('[verification] saveVerifications failed:', JSON.stringify({ code: error?.code, message: error?.message, details: error?.details, hint: error?.hint, itemCount: items.length, firstItem: items[0] ? { run_id: items[0].run_id, evidence_item_id: items[0].evidence_item_id } : null }))
       throw new AppError(500, 'EVIDENCE_VERIFICATION_SAVE_FAILED', 'Failed to persist verification verdicts.')
     }
 
