@@ -572,16 +572,16 @@ export async function fetchMca21Firecrawl(companyName: string, profile: Property
 
   const queryGroups = [
     [
-      `${companyName} company CIN status zaubacorp`,
-      `${companyName} private limited company zaubacorp company details`,
+      `"${companyName}" company CIN status zaubacorp private limited`,
+      `"${companyName}" company details zaubacorp incorporation Gujarat Ahmedabad`,
     ],
     [
-      `${companyName} tofler company financials registration`,
-      `${companyName} tofler company incorporation date status`,
+      `"${companyName}" tofler company financials registration`,
+      `"${companyName}" tofler company status Ahmedabad builders`,
     ],
     [
-      `${companyName} builders developers MCA registration incorporation CIN`,
-      `${companyName} company status npa defaulter information`,
+      `"${companyName}" builders developers MCA registration Ahmedabad Gujarat`,
+      `"${companyName}" builder real estate company status npa defaulter India`,
     ],
   ]
 

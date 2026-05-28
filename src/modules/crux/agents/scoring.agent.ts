@@ -74,6 +74,28 @@ function buildWeights(
   return w;
 }
 
+function recoverScoringJson(text: string): string | null {
+  let recovered = text.trim()
+  let openBraces = 0, openBrackets = 0, inString = false, escaped = false
+  for (let i = 0; i < recovered.length; i++) {
+    const ch = recovered[i]
+    if (escaped) { escaped = false; continue }
+    if (ch === '\\') { escaped = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') openBraces++
+    if (ch === '}') openBraces--
+    if (ch === '[') openBrackets++
+    if (ch === ']') openBrackets--
+  }
+  if (inString) { recovered += '"}'
+    try { JSON.parse(recovered); return recovered } catch { return null }
+  }
+  while (openBrackets > 0) { recovered += ']'; openBrackets-- }
+  while (openBraces > 0) { recovered += '}'; openBraces-- }
+  try { JSON.parse(recovered); return recovered } catch { return null }
+}
+
 function scoreLocationIntelligence(
   cpcb: FetcherResult<CpcbAqiData>,
   gmaps: FetcherResult<GoogleMapsData>,
@@ -330,8 +352,13 @@ Weight adjustments should reflect REAL PROPERTY-SPECIFIC information:
     try {
       parsed = JSON.parse(jsonMatch[0]);
     } catch (parseErr) {
-      console.error('[scoring.agent] LLM JSON parse failed:', (parseErr as Error)?.message, '| raw:', jsonMatch[0].slice(0, 200));
-      return null;
+      const recovered = recoverScoringJson(jsonMatch[0])
+      if (recovered) {
+        try { parsed = JSON.parse(recovered) } catch { return null }
+      } else {
+        console.error('[scoring.agent] LLM JSON parse failed:', (parseErr as Error)?.message, '| raw:', jsonMatch[0].slice(0, 200));
+        return null;
+      }
     }
     if (!parsed.adjustments || !Array.isArray(parsed.adjustments)) return null;
 
