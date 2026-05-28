@@ -50,6 +50,18 @@ interface EnvConfig {
   CRUX_RESEARCH_ALLOWED_DOMAINS: string[];
   /** Verification cache TTL in hours */
   CRUX_VERIFICATION_TTL_HOURS: number;
+  /** Firecrawl self-hosted URL on Azure VM */
+  FIRECRAWL_URL: string;
+  /** Per-request timeout in ms (30s for agent/interact) */
+  FIRECRAWL_TIMEOUT_MS: number;
+  /** Max retry attempts per endpoint */
+  FIRECRAWL_RETRY_COUNT: number;
+  /** Max pages per /v2/crawl */
+  FIRECRAWL_CRAWL_MAX_PAGES: number;
+  /** Max browser actions per /v2/agent */
+  FIRECRAWL_AGENT_MAX_STEPS: number;
+  /** Max results per /v2/search */
+  FIRECRAWL_SEARCH_MAX_RESULTS: number;
 }
 
 function requireEnv(key: string): string {
@@ -78,19 +90,20 @@ export const env: EnvConfig = {
   CLERK_WEBHOOK_SECRET: requireEnv("CLERK_WEBHOOK_SECRET"),
   TAVILY_API_KEY: process.env.TAVILY_API_KEY || "",
   CRUX_RESEARCH_TTL_HOURS: parseInt(process.env.CRUX_RESEARCH_TTL_HOURS || "24", 10),
-  CRUX_RESEARCH_MAX_WEB_RESULTS: parseInt(process.env.CRUX_RESEARCH_MAX_WEB_RESULTS || "8", 10),
+  CRUX_RESEARCH_MAX_WEB_RESULTS: parseInt(process.env.CRUX_RESEARCH_MAX_WEB_RESULTS || "3", 10),
   CRUX_RESEARCH_MAX_EVIDENCE_ITEMS: parseInt(process.env.CRUX_RESEARCH_MAX_EVIDENCE_ITEMS || "20", 10),
   CRUX_RESEARCH_ALLOWED_DOMAINS: (process.env.CRUX_RESEARCH_ALLOWED_DOMAINS || "")
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean),
   CRUX_VERIFICATION_TTL_HOURS: parseInt(process.env.CRUX_VERIFICATION_TTL_HOURS || "24", 10),
+  FIRECRAWL_URL: process.env.FIRECRAWL_URL || "http://98.70.45.123:3002",
+  FIRECRAWL_TIMEOUT_MS: parseInt(process.env.FIRECRAWL_TIMEOUT_MS || "30000", 10),
+  FIRECRAWL_RETRY_COUNT: parseInt(process.env.FIRECRAWL_RETRY_COUNT || "3", 10),
+  FIRECRAWL_CRAWL_MAX_PAGES: parseInt(process.env.FIRECRAWL_CRAWL_MAX_PAGES || "15", 10),
+  FIRECRAWL_AGENT_MAX_STEPS: parseInt(process.env.FIRECRAWL_AGENT_MAX_STEPS || "8", 10),
+  FIRECRAWL_SEARCH_MAX_RESULTS: parseInt(process.env.FIRECRAWL_SEARCH_MAX_RESULTS || "3", 10),
 };
 
-// CRUX Data Source URLs (defaults to public government endpoints)
-export const CPCB_API_URL = process.env.CPCB_API_URL || 'https://app.cpcbccr.com/caaqms/caaqms_viewData_v2';
-export const MCA21_SEARCH_URL = process.env.MCA21_SEARCH_URL || 'https://www.mca.gov.in/mcafoportal/companyLLPMasterData.do';
-export const ECOURTS_API_URL = process.env.ECOURTS_API_URL || 'https://webapi.ecourtsindia.com/api/partner';
-export const ECOURTS_API_KEY = process.env.ECOURTS_API_KEY || '';
-export const NHB_RESIDEX_TABLE = 'crux_residex_cache';
-export const CPWD_RATES_TABLE = 'crux_cpwd_cache';
+// Firecrawl self-hosted URL (all data sources now flow through Firecrawl)
+export const FIRECRAWL_URL = process.env.FIRECRAWL_URL || 'http://98.70.45.123:3002';

@@ -83,6 +83,7 @@ export interface Mca21Data {
   npa_flag: boolean;
   incorporation_date: string;
   director_count: number;
+  data_source?: string;
 }
 
 export interface EcourtsData {
@@ -128,7 +129,7 @@ export type ResearchRunStatus = 'running' | 'success' | 'partial_failed' | 'fail
 
 export type ResearchSurface = 'api' | 'lens' | 'report';
 
-export type ResearchProvider = 'tavily';
+export type ResearchProvider = 'tavily' | 'firecrawl';
 
 export type EvidenceDomain =
   | 'property'
@@ -343,6 +344,25 @@ export interface ClarificationRequest {
   is_optional: boolean;
 }
 
+// ─── Weight Adjustment ───────────────────────────────────────────────────────
+
+export type ScoringCategory =
+  | 'location_intelligence'
+  | 'developer_reliability'
+  | 'legal_compliance'
+  | 'market_valuation'
+  | 'structural_physical'
+  | 'risk_composite';
+
+export interface WeightAdjustment {
+  category: ScoringCategory;
+  base_weight: number;
+  adjusted_weight: number;
+  delta: number;
+  reason: string;
+  evidence_ids: string[];
+}
+
 // ─── CRUX Score ───────────────────────────────────────────────────────────────
 
 export interface ScoreBreakdown {
@@ -352,6 +372,7 @@ export interface ScoreBreakdown {
   market_valuation: number;            // 0-100, weight: 15%
   structural_physical: number;         // 0-100, weight: 10% (stub in MVP)
   risk_composite: number;              // 0-100, weight: 5%
+  weight_adjustments?: WeightAdjustment[];
 }
 
 export interface CruxScore {
@@ -370,6 +391,8 @@ export interface CruxScore {
   ttl_expires_at: string;              // 24h from creation
   degraded: boolean;                   // true if confidence < 0.4
   clarifications_requested: ClarificationRequest[];
+  weight_adjustments?: WeightAdjustment[];
+  verified_evidence_used?: number;
 }
 
 export interface ComputeScoreInput {

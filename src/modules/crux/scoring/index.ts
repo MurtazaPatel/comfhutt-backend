@@ -7,8 +7,8 @@ import type {
   MacroCycle,
   PropertyProfile,
 } from '../shared/types';
-import { fetchAllSources } from '../agents/fetcher.agent';
 import { computeScore } from '../agents/scoring.agent';
+import { runUnifiedPipeline } from '../orchestrator/orchestrator.service';
 
 async function computeAndPersist(
   propertyId: string,
@@ -26,8 +26,18 @@ async function computeAndPersist(
   if (!row) throw new AppError(404, 'PROPERTY_NOT_FOUND', 'Property not found');
 
   const profile = row as unknown as PropertyProfile;
-  const fetcherOutput = await fetchAllSources(profile);
-  const score = computeScore(fetcherOutput, intent, lifecycle, macroCycle);
+
+  const pipelineResult = await runUnifiedPipeline(profile);
+
+  const verifiedEvidence = pipelineResult.verificationDigest?.verified_items ?? [];
+
+  const score = await computeScore(
+    pipelineResult.fetcherOutput,
+    intent,
+    lifecycle,
+    macroCycle,
+    verifiedEvidence.length > 0 ? verifiedEvidence : undefined,
+  );
 
   const { error: upsertErr } = await supabase
     .from('crux_scores')
@@ -42,15 +52,18 @@ async function computeAndPersist(
       agent_type: 'scorer',
       property_id: propertyId,
       input_payload: {
-        sources_succeeded: fetcherOutput.sources_succeeded,
+        sources_succeeded: pipelineResult.fetcherOutput.sources_succeeded,
         intent,
         lifecycle,
         macro: macroCycle,
+        verified_evidence_used: verifiedEvidence.length,
       },
       output_payload: {
         score_composite: score.score_composite,
         confidence_score: score.confidence_score,
         degraded: score.degraded,
+        weight_adjustments_applied:
+          (score.weight_adjustments?.length ?? 0) > 0,
       },
       tokens_used: 0,
       latency_ms: Date.now() - scorerStart,

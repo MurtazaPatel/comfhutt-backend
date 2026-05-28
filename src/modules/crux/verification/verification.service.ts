@@ -141,6 +141,7 @@ class SupabaseVerificationRepository implements VerificationRepository {
       .single()
 
     if (error || !data) {
+      console.error('[verification] createRun failed:', JSON.stringify({ code: error?.code, message: error?.message, details: error?.details, hint: error?.hint }))
       throw new AppError(500, 'VERIFICATION_RUN_CREATE_FAILED', 'Failed to create verification run.')
     }
 
@@ -243,17 +244,26 @@ function finalizeVerificationStatus(
   const contradictionScore = Math.max(deterministic.contradiction_score, assessment.contradiction_score)
   const supportScore = Math.max(deterministic.support_score, assessment.support_score)
   const directMatch = deterministic.direct_match
-  const canVerify = evidence.status === 'accepted' && (evidence.authority_tier === 'official' || evidence.authority_tier === 'primary')
+  const canVerify = evidence.status === 'accepted' || evidence.status === 'weak'
+  const authorityTier = evidence.authority_tier
 
-  if (assessment.verification_status === 'contradicted' || contradictionScore >= 0.65) {
+  if (assessment.verification_status === 'contradicted' || contradictionScore >= 0.70) {
     return 'contradicted'
   }
 
-  if (assessment.verification_status === 'verified' && canVerify && directMatch && contradictionScore < 0.5) {
+  if (assessment.verification_status === 'verified' && canVerify && directMatch && contradictionScore < 0.55) {
     return 'verified'
   }
 
-  if (canVerify && directMatch && supportScore >= 0.72 && contradictionScore < 0.45) {
+  if (canVerify && authorityTier === 'secondary' && directMatch && supportScore >= 0.72 && contradictionScore < 0.35) {
+    return 'verified'
+  }
+
+  if (canVerify && (authorityTier === 'official' || authorityTier === 'primary') && directMatch && supportScore >= 0.60 && contradictionScore < 0.50) {
+    return 'verified'
+  }
+
+  if (canVerify && (authorityTier === 'unknown') && directMatch && supportScore >= 0.75 && contradictionScore < 0.30) {
     return 'verified'
   }
 

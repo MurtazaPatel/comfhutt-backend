@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { env } from '../../../config/env'
+import { generateWithFallback, GEMINI_MODELS } from '../../../lib/gemini'
 import type {
   EvidenceAuthorityTier,
   EvidenceDomain,
@@ -25,6 +26,32 @@ const DEFAULT_ALLOWED_DOMAINS = [
   'nhb.org.in',
   'cpcb.nic.in',
   'cpwd.gov.in',
+]
+
+const PRIMARY_TIER_DOMAINS = [
+  'timesofindia.indiatimes.com',
+  'economictimes.indiatimes.com',
+  'thehindu.com',
+  'indianexpress.com',
+  'business-standard.com',
+  'livemint.com',
+  'financialexpress.com',
+  'knightfrank.com',
+  'jll.co.in',
+  'cbre.co.in',
+  'anarock.com',
+  'propequity.in',
+  'cushmanwakefield.com',
+  'crisil.com',
+  'icra.in',
+  'careratings.com',
+  'indiaratings.co.in',
+  'bseindia.com',
+  'nseindia.com',
+  'screener.in',
+  'zaubacorp.com',
+  'tofler.in',
+  'liasesforas.com',
 ]
 
 const FRESHNESS_DAYS: Record<EvidenceDomain, number> = {
@@ -63,6 +90,26 @@ function matchesDomain(hostname: string, candidate: string): boolean {
   return hostname === candidate || hostname.endsWith(`.${candidate}`)
 }
 
+function recoverJson(text: string): string | null {
+  let recovered = text.trim()
+  let openBraces = 0, openBrackets = 0, inString = false, escaped = false
+  for (let i = 0; i < recovered.length; i++) {
+    const ch = recovered[i]
+    if (escaped) { escaped = false; continue }
+    if (ch === '\\') { escaped = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') openBraces++
+    if (ch === '}') openBraces--
+    if (ch === '[') openBrackets++
+    if (ch === ']') openBrackets--
+  }
+  if (inString) { recovered += '"' }
+  while (openBrackets > 0) { recovered += ']'; openBrackets-- }
+  while (openBraces > 0) { recovered += '}'; openBraces-- }
+  try { JSON.parse(recovered); return recovered } catch { return null }
+}
+
 export function isAllowedDomain(url: string | null | undefined, allowedDomains: string[]): boolean {
   const hostname = extractHostname(url)
   if (!hostname) return false
@@ -74,25 +121,38 @@ export function classifyAuthorityTier(
   sourcePath: string | null,
   allowedDomains: string[],
 ): EvidenceAuthorityTier {
-  if (sourcePath) return 'primary'
-
   const hostname = extractHostname(sourceUrl)
-  if (!hostname) return 'unknown'
+  if (!hostname && !sourcePath) return 'unknown'
 
-  if (
-    hostname.endsWith('.gov.in')
-    || hostname.endsWith('.nic.in')
-    || hostname === 'mca.gov.in'
-    || hostname.endsWith('.rera.gov.in')
-    || hostname.includes('rera')
-    || hostname.includes('ecourts')
-  ) {
-    return 'official'
+  if (hostname) {
+    if (
+      hostname.endsWith('.gov.in')
+      || hostname.endsWith('.nic.in')
+      || hostname === 'mca.gov.in'
+      || hostname.endsWith('.rera.gov.in')
+      || hostname.includes('rera')
+      || hostname.includes('ecourts')
+      || hostname.includes('consumerhelpline')
+      || hostname.includes('ncdrc')
+      || hostname.includes('cpcb')
+      || hostname.includes('nhb.org')
+      || hostname.includes('sebi.gov')
+      || hostname.includes('rbi.org')
+      || hostname.endsWith('.gov')
+    ) {
+      return 'official'
+    }
+
+    if (PRIMARY_TIER_DOMAINS.some((candidate) => matchesDomain(hostname, candidate))) {
+      return 'primary'
+    }
+
+    if (allowedDomains.some((candidate) => matchesDomain(hostname, candidate))) {
+      return 'primary'
+    }
   }
 
-  if (allowedDomains.some((candidate) => matchesDomain(hostname, candidate))) {
-    return 'primary'
-  }
+  if (sourcePath) return 'primary'
 
   return 'secondary'
 }
@@ -124,11 +184,23 @@ export function computeEvidenceStatus(
     return { status: 'rejected', rejection_reason: 'LOW_CONFIDENCE' }
   }
 
-  if (authorityTier === 'official' || authorityTier === 'primary') {
+  if (authorityTier === 'official') {
     return { status: 'accepted', rejection_reason: null }
   }
 
-  return { status: 'weak', rejection_reason: 'SOURCE_NOT_AUTHORITATIVE' }
+  if (authorityTier === 'primary' && confidence >= 0.40) {
+    return { status: 'accepted', rejection_reason: null }
+  }
+
+  if (authorityTier === 'secondary' && confidence >= 0.55) {
+    return { status: 'accepted', rejection_reason: null }
+  }
+
+  if (confidence >= 0.25) {
+    return { status: 'weak', rejection_reason: null }
+  }
+
+  return { status: 'rejected', rejection_reason: 'SOURCE_NOT_AUTHORITATIVE' }
 }
 
 export function computeFreshnessExpiry(domain: EvidenceDomain, observedAt: string | null): string | null {
@@ -254,21 +326,125 @@ export function buildSeedUrlResults(seedUrls: string[]): SearchResult[] {
   }))
 }
 
-export function buildResearchQueries(property: PropertyProfile): string[] {
+export interface ResearchQuery {
+  query: string
+  rationale: string
+  domain_hint?: string | null
+  authority_tier: EvidenceAuthorityTier
+}
+
+export async function generateSmartQueries(property: PropertyProfile): Promise<ResearchQuery[]> {
+  const city = property.city ?? ''
+  const state = property.state ?? ''
+  const developer = property.developer_name?.trim() ?? ''
   const address = property.address_normalized ?? property.address_raw
+
+  const systemPrompt = `You are the CRUX Research Strategist — the intelligence behind India's most advanced property research engine. Your job is to think like an investigative journalist, a property lawyer, and a financial analyst simultaneously.
+
+For a given property, generate 8-12 search queries that would uncover intelligence that:
+1. No competitor would think to search for
+2. Reveals risks or opportunities hidden from public listings
+3. Comes from authoritative government or institutional sources
+4. Provides specific, verifiable, data-backed claims
+
+Categories (generate at least 1 query per category):
+- DEVELOPER INTEGRITY: Past project delays, RERA complaints, consumer court cases, financial health
+- LOCALITY INTELLIGENCE: Upcoming infrastructure (metro, highways), crime statistics, flooding/waterlogging history
+- MARKET DYNAMICS: Oversupply indicators, absorption rates, price trends, rental yield data
+- LEGAL RISKS: Land title disputes, environmental clearance status, building plan approvals, occupancy certificate
+- ENVIRONMENTAL: AQI trends over time, groundwater levels, seismic zone, flood plain mapping
+- HIDDEN RISKS: Community opposition, litigation by neighboring societies, political connections
+
+For each query, provide:
+- "query": the exact search query string
+- "rationale": a brief explanation of what hidden intelligence this would uncover
+- "domain_hint": restrict to specific authoritative domains (e.g. "site:gujrera.gujarat.gov.in") or null
+- "authority_tier": "official"|"primary"|"secondary" based on expected source quality
+
+OUTPUT: Valid JSON array only. No other text.`
+
+  const userPrompt = `
+PROPERTY CONTEXT:
+${JSON.stringify({
+  address,
+  city,
+  state,
+  pin_code: property.pin_code,
+  property_type: property.property_type,
+  developer_name: developer || null,
+}, null, 2)}
+
+Generate 8-12 creative, high-signal search queries for this property.
+Respond with ONLY a JSON array — no markdown, no explanation.`
+
+  try {
+    const raw = await generateWithFallback({
+      model: GEMINI_MODELS.RESEARCH_AGENT,
+      systemInstruction: systemPrompt,
+      prompt: userPrompt,
+      temperature: 0.7,
+      maxOutputTokens: 4096,
+    })
+    const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(clean)
+    } catch {
+      const recovered = recoverJson(clean)
+      if (recovered) {
+        parsed = JSON.parse(recovered)
+      } else {
+        throw new Error('JSON_RECOVERY_FAILED')
+      }
+    }
+
+    if (!Array.isArray(parsed)) return buildResearchQueries(property).map(q => ({ query: q, rationale: '', authority_tier: 'secondary' as EvidenceAuthorityTier }))
+
+    const queries: ResearchQuery[] = []
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') continue
+      const record = item as Record<string, unknown>
+      const query = typeof record.query === 'string' ? record.query.trim() : ''
+      if (!query || query.length < 5) continue
+
+      const tier = typeof record.authority_tier === 'string' && ['official', 'primary', 'secondary'].includes(record.authority_tier)
+        ? record.authority_tier as EvidenceAuthorityTier
+        : 'secondary'
+
+      queries.push({
+        query,
+        rationale: typeof record.rationale === 'string' ? record.rationale : '',
+        domain_hint: typeof record.domain_hint === 'string' ? record.domain_hint : null,
+        authority_tier: tier,
+      })
+    }
+
+    if (queries.length === 0) {
+      return buildResearchQueries(property).map(q => ({ query: q, rationale: '', authority_tier: 'secondary' as EvidenceAuthorityTier }))
+    }
+
+    return queries.slice(0, 12)
+  } catch (error) {
+    console.warn('[research.policy] Gemini query generation failed, using static queries:', (error as Error)?.message?.slice(0, 100))
+    return buildResearchQueries(property).map(q => ({ query: q, rationale: '', authority_tier: 'secondary' as EvidenceAuthorityTier }))
+  }
+}
+
+export function buildResearchQueries(property: PropertyProfile): string[] {
   const city = property.city ?? ''
   const state = property.state ?? ''
   const developer = property.developer_name?.trim()
 
   const queries = [
-    `"${address}" ${city} ${state} RERA OR approval OR project details`,
-    `"${address}" ${city} ${state} litigation OR court OR dispute`,
-    `${city} ${state} residential market pricing infrastructure`,
-    `${city} ${state} air quality environment property locality`,
+    `${city} ${state} ${developer ? developer + ' ' : ''}RERA project registration approval`,
+    `${city} ${state} residential real estate market pricing 2025`,
+    `${city} ${state} infrastructure development metro transport`,
+    `${developer ? developer + ' ' : ''}${city} builder complaints reviews delivery`,
+    `${city} ${state} air quality environment pollution`,
   ]
 
   if (developer) {
-    queries.push(`"${developer}" company filings litigation RERA projects`)
+    queries.push(`${developer} company CIN registration RERA projects`)
   }
 
   return Array.from(new Set(queries.map((query) => query.trim()).filter(Boolean)))

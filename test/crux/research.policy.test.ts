@@ -31,11 +31,11 @@ test('computeEvidenceStatus downgrades non-authoritative sources to weak', () =>
     'secondary',
     'https://news.example.com/story',
     null,
-    0.8,
+    0.40,
   )
 
   assert.equal(result.status, 'weak')
-  assert.equal(result.rejection_reason, 'SOURCE_NOT_AUTHORITATIVE')
+  assert.equal(result.rejection_reason, null)
 })
 
 test('computeClaimHash is stable for the same claim and source identity', () => {

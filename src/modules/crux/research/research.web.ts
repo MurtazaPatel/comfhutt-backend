@@ -1,92 +1,147 @@
-import { env } from '../../../config/env'
+import { firecrawlClient } from '../../../lib/firecrawl'
 import type { PageContent, SearchResult } from '../shared/types'
 
 export interface ResearchWebProvider {
   search(query: string, options?: { maxResults?: number }): Promise<SearchResult[]>
   fetchPage(url: string): Promise<PageContent>
-}
-
-function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+  fetchPages?(urls: string[]): Promise<Map<string, string>>
+  mapDomain?(url: string, search?: string): Promise<string[]>
+  deepResearch?(query: string, domainHint?: string | null): Promise<SearchResult[]>
 }
 
 function createExcerpt(text: string, maxLength: number = 280): string {
   return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`
 }
 
-interface TavilyResultPayload {
-  title?: unknown
-  url?: unknown
-  content?: unknown
-  raw_content?: unknown
-  score?: unknown
-  published_date?: unknown
+function toSearchResult(r: {
+  title?: string
+  url?: string
+  description?: string
+  markdown?: string
+}): SearchResult {
+  return {
+    title: r.title ?? 'Untitled',
+    url: r.url ?? '',
+    snippet: r.description ?? '',
+    raw_content: r.markdown ?? null,
+    score: null,
+    published_at: null,
+  }
 }
 
-interface TavilyResponsePayload {
-  results?: TavilyResultPayload[]
-}
-
-export class TavilyWebProvider implements ResearchWebProvider {
+export class FirecrawlWebProvider implements ResearchWebProvider {
   async search(query: string, options?: { maxResults?: number }): Promise<SearchResult[]> {
-    if (!env.TAVILY_API_KEY) {
-      throw new Error('TAVILY_API_KEY_NOT_CONFIGURED')
-    }
-
-    const response = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const result = await firecrawlClient.search(query, {
+      limit: options?.maxResults ?? 5,
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: false,
       },
-      body: JSON.stringify({
-        api_key: env.TAVILY_API_KEY,
-        query,
-        search_depth: 'advanced',
-        include_raw_content: true,
-        max_results: options?.maxResults ?? env.CRUX_RESEARCH_MAX_WEB_RESULTS,
-      }),
     })
 
-    if (!response.ok) {
-      throw new Error(`TAVILY_HTTP_${response.status}`)
-    }
-
-    const payload = await response.json() as TavilyResponsePayload
-
-    return (payload.results ?? []).map((result) => ({
-      title: typeof result.title === 'string' ? result.title : 'Untitled source',
-      url: typeof result.url === 'string' ? result.url : '',
-      snippet: typeof result.content === 'string' ? result.content : '',
-      raw_content: typeof result.raw_content === 'string' ? result.raw_content : null,
-      score: typeof result.score === 'number' ? result.score : null,
-      published_at: typeof result.published_date === 'string' ? result.published_date : null,
-    })).filter((result) => Boolean(result.url))
+    return (result.data?.web ?? [])
+      .filter((r) => Boolean(r.url))
+      .map(toSearchResult)
   }
 
   async fetchPage(url: string): Promise<PageContent> {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'ComfHutt-CRUX/1.0 (Research Evidence Agent)',
-      },
+    const result = await firecrawlClient.scrape(url, {
+      formats: ['markdown'],
+      onlyMainContent: true,
     })
 
-    if (!response.ok) {
-      throw new Error(`PAGE_FETCH_HTTP_${response.status}`)
-    }
-
-    const raw = await response.text()
-    const text_content = stripHtml(raw)
+    const markdown = result.data?.markdown ?? ''
     return {
       url,
-      title: url,
-      text_content,
-      excerpt: createExcerpt(text_content),
+      title: result.data?.metadata?.title ?? url,
+      text_content: markdown,
+      excerpt: createExcerpt(markdown),
       fetched_at: new Date().toISOString(),
     }
+  }
+
+  async fetchPages(urls: string[]): Promise<Map<string, string>> {
+    const map = new Map<string, string>()
+
+    try {
+      const result = await firecrawlClient.batchScrape(urls, {
+        formats: ['markdown'],
+        onlyMainContent: false,
+      })
+      if (result.success && result.data) {
+        for (const item of result.data) {
+          if (item.url && item.markdown) {
+            map.set(item.url, item.markdown)
+          }
+        }
+      }
+      if (map.size > 0) return map
+    } catch {}
+
+    const scraped = await Promise.all(
+      urls.map(async (url) => {
+        try {
+          const page = await this.fetchPage(url)
+          return { url, content: page.text_content }
+        } catch {
+          return { url, content: '' }
+        }
+      }),
+    )
+
+    for (const { url, content } of scraped) {
+      if (content) map.set(url, content)
+    }
+
+    return map
+  }
+
+  async mapDomain(url: string, search?: string): Promise<string[]> {
+    const result = await firecrawlClient.map(url, {
+      limit: 100,
+      search,
+    })
+    return (result.links ?? []).slice(0, 30)
+  }
+
+  async deepResearch(query: string, domainHint?: string | null): Promise<SearchResult[]> {
+    const results: SearchResult[] = []
+
+    const searchResult = await firecrawlClient.search(query, {
+      limit: 4,
+      scrapeOptions: {
+        formats: ['markdown'],
+        onlyMainContent: false,
+      },
+    })
+    if (searchResult.data?.web) {
+      results.push(...searchResult.data.web.filter((r) => Boolean(r.url)).map(toSearchResult))
+    }
+
+    if (domainHint) {
+      const domainMatch = domainHint.match(/site:([\w.-]+)/)
+      const domain = domainMatch?.[1]
+      if (domain) {
+        try {
+          const mappedUrls = await this.mapDomain(`https://${domain}`, query)
+          if (mappedUrls.length > 0) {
+            const batchContent = await this.fetchPages(mappedUrls.slice(0, 8))
+            for (const [url, content] of batchContent) {
+              results.push({
+                title: url,
+                url,
+                snippet: content.slice(0, 280),
+                raw_content: content,
+                score: null,
+                published_at: null,
+              })
+            }
+          }
+        } catch {}
+      }
+    }
+
+    const seen = new Set(results.map((r) => r.url))
+    return results.filter((r) => r.url && !seen.has(r.url) && seen.add(r.url) && seen.delete(r.url) === false)
   }
 }

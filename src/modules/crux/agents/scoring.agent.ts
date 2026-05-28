@@ -1,4 +1,4 @@
-// Pure deterministic scoring — no LLM calls in v0.1.
+// Deterministic scoring with optional LLM weight adjustment (v0.2).
 // TYPE DEVIATIONS:
 // - LifecycleStage only has 'near_completion' | 'delivered' (not 4 values)
 // - MacroCycle only has 'growth' | 'correction' (not 4 values)
@@ -7,6 +7,7 @@
 // - CruxScore uses `degraded` (not `degraded_data`)
 
 import { createHash } from 'crypto';
+import { generateWithFallback, GEMINI_MODELS } from '../../../lib/gemini';
 import { env } from '../../../config/env';
 import type {
   AggregatedFetcherOutput,
@@ -23,17 +24,10 @@ import type {
   Mca21Data,
   EcourtsData,
   CpwdData,
+  ScoringCategory,
+  WeightAdjustment,
+  VerifiedEvidenceItem,
 } from '../shared/types';
-
-// ── Weights ──────────────────────────────────────────────────────────────────
-
-type ScoringCategory =
-  | 'location_intelligence'
-  | 'developer_reliability'
-  | 'legal_compliance'
-  | 'market_valuation'
-  | 'structural_physical'
-  | 'risk_composite';
 
 const BASE_WEIGHTS: Record<ScoringCategory, number> = {
   location_intelligence: 0.30,
@@ -75,13 +69,10 @@ function buildWeights(
     w.location_intelligence -= 0.05;
   }
 
-  // Normalize so weights sum to exactly 1.0
   const sum = (Object.values(w) as number[]).reduce((a, b) => a + b, 0);
   (Object.keys(w) as ScoringCategory[]).forEach(k => { w[k] /= sum; });
   return w;
 }
-
-// ── Per-category scorers ─────────────────────────────────────────────────────
 
 function scoreLocationIntelligence(
   cpcb: FetcherResult<CpcbAqiData>,
@@ -127,7 +118,7 @@ function scoreDeveloperReliability(mca21: FetcherResult<Mca21Data>): number {
   }
 
   const npaScore = mca21.data.npa_flag ? 10 : 100;
-  const filingScore = 50; // Mca21Data has no annual_filing field — neutral stub
+  const filingScore = 50;
 
   return statusScore * 0.50 + npaScore * 0.30 + filingScore * 0.20;
 }
@@ -173,7 +164,7 @@ function scoreMarketValuation(
 }
 
 function scoreStructuralPhysical(): number {
-  return 50; // STRUCTURAL_STUB_MVP — no live data sources in v0.1
+  return 50;
 }
 
 function scoreRiskComposite(breakdown: Omit<ScoreBreakdown, 'risk_composite'>): number {
@@ -190,15 +181,175 @@ function scoreRiskComposite(breakdown: Omit<ScoreBreakdown, 'risk_composite'>): 
   return Math.max(0, Math.min(100, avg + penalty));
 }
 
-// ── Exported function ────────────────────────────────────────────────────────
+interface LLMAdjustmentResponse {
+  adjustments: Array<{
+    category: ScoringCategory;
+    delta: number;
+    reason: string;
+    evidence_ids: string[];
+  }>;
+}
 
-export function computeScore(
+function validateAndClampAdjustments(
+  raw: LLMAdjustmentResponse,
+  baseWeights: Record<ScoringCategory, number>,
+  verifiedEvidence: VerifiedEvidenceItem[],
+): {
+  adjustments: WeightAdjustment[];
+  adjustedWeights: Record<ScoringCategory, number>;
+} | null {
+  const validEvidenceIds = new Set(
+    verifiedEvidence.flatMap((ve) => [
+      ve.evidence.id,
+      ve.verification.evidence_item_id,
+    ]),
+  );
+
+  const validCategories = Object.keys(baseWeights);
+  const clamped: WeightAdjustment[] = [];
+
+  for (const adj of raw.adjustments ?? []) {
+    if (!validCategories.includes(adj.category)) continue;
+    if (typeof adj.delta !== 'number' || Number.isNaN(adj.delta)) continue;
+
+    const delta = Math.max(-0.03, Math.min(0.03, adj.delta));
+
+    for (const eid of adj.evidence_ids ?? []) {
+      if (!validEvidenceIds.has(eid)) {
+        return null;
+      }
+    }
+
+    clamped.push({
+      category: adj.category,
+      base_weight: baseWeights[adj.category],
+      adjusted_weight: 0,
+      delta,
+      reason: adj.reason,
+      evidence_ids: adj.evidence_ids,
+    });
+  }
+
+  const totalShift = clamped.reduce((sum, a) => sum + Math.abs(a.delta), 0);
+  if (totalShift > 0.05 + 0.001) return null;
+
+  const adjusted = { ...baseWeights };
+  for (const adj of clamped) {
+    adjusted[adj.category] += adj.delta;
+  }
+
+  for (const key of validCategories as ScoringCategory[]) {
+    if (adjusted[key] < 0) return null;
+  }
+
+  const sum = (Object.values(adjusted) as number[]).reduce((a, b) => a + b, 0);
+  for (const key of validCategories as ScoringCategory[]) {
+    adjusted[key] /= sum;
+  }
+
+  for (const adj of clamped) {
+    adj.adjusted_weight = adjusted[adj.category];
+  }
+
+  return { adjustments: clamped, adjustedWeights: adjusted };
+}
+
+async function adjustWeightsWithLLM(
+  baseWeights: Record<ScoringCategory, number>,
+  verifiedEvidence: VerifiedEvidenceItem[],
+  intent: IntentProfile,
+  lifecycle: LifecycleStage,
+  macroCycle: MacroCycle,
+): Promise<{
+  adjustments: WeightAdjustment[];
+  adjustedWeights: Record<ScoringCategory, number>;
+} | null> {
+  if (!verifiedEvidence.length) return null;
+
+  const evidenceContext = verifiedEvidence.map((ve) => ({
+    id: ve.evidence.id,
+    domain: ve.evidence.domain,
+    claim: ve.evidence.claim_text,
+    confidence: ve.verification.verifier_confidence,
+    status: ve.verification.verification_status,
+  }));
+
+  const userPrompt = `BASE WEIGHTS:
+${JSON.stringify(baseWeights, null, 2)}
+
+VERIFIED EVIDENCE (only use these — never fabricate):
+${JSON.stringify(evidenceContext, null, 2)}
+
+INTENT: ${intent}
+LIFECYCLE: ${lifecycle}
+MACRO_CYCLE: ${macroCycle}
+
+Respond with ONLY valid JSON in this exact shape:
+{
+  "adjustments": [
+    { "category": "location_intelligence", "delta": 0.00, "reason": "citation here", "evidence_ids": ["ev-123"] }
+  ]
+}`;
+
+  const systemPrompt = `You are the CRUX Scoring Weight Adjuster. Your ONLY job is to recommend tiny adjustments to scoring category weights based on verified evidence.
+
+CONSTRAINTS (non-negotiable):
+1. You may adjust each weight by AT MOST ±0.03 from its base value.
+2. The TOTAL absolute change across all 6 categories MUST NOT exceed 0.05.
+3. For EVERY adjustment, you MUST cite which verified evidence item supports it (use evidence item IDs).
+4. If no evidence supports an adjustment for a category, leave its delta at 0.
+5. Output ONLY valid JSON. Never output reasoning text.
+
+Weight adjustments should reflect REAL PROPERTY-SPECIFIC information:
+- Positive verified evidence about location → slightly increase location_intelligence weight
+- Negative verified evidence about developer → slightly increase developer_reliability weight (more weight on a weak signal signals risk)
+- Verified market pricing data → slightly adjust market_valuation weight
+- Environmental concerns (AQI data, flood risks) → adjust environment-related weights`;
+
+  try {
+    let text = await generateWithFallback({
+      model: GEMINI_MODELS.SCORING_AGENT,
+      systemInstruction: systemPrompt,
+      prompt: userPrompt,
+      temperature: 0.1,
+      maxOutputTokens: 2048,
+    })
+
+    const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch?.[1]) {
+      text = fenceMatch[1].trim();
+    }
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('[scoring.agent] LLM response contained no JSON object:', text.slice(0, 200));
+      return null;
+    }
+
+    let parsed: LLMAdjustmentResponse;
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch (parseErr) {
+      console.error('[scoring.agent] LLM JSON parse failed:', (parseErr as Error)?.message, '| raw:', jsonMatch[0].slice(0, 200));
+      return null;
+    }
+    if (!parsed.adjustments || !Array.isArray(parsed.adjustments)) return null;
+
+    return validateAndClampAdjustments(parsed, baseWeights, verifiedEvidence);
+  } catch (error) {
+    console.error('[scoring.agent] LLM weight adjustment failed:', (error as Error)?.message ?? 'unknown');
+    return null;
+  }
+}
+
+export async function computeScore(
   output: AggregatedFetcherOutput,
   intent: IntentProfile,
   lifecycle: LifecycleStage,
   macro: MacroCycle,
-): CruxScore {
-  const weights = buildWeights(intent, lifecycle, macro);
+  verifiedEvidence?: VerifiedEvidenceItem[],
+): Promise<CruxScore> {
+  const baseWeights = buildWeights(intent, lifecycle, macro);
 
   const li = scoreLocationIntelligence(output.cpcb_aqi, output.google_maps);
   const dr = scoreDeveloperReliability(output.mca21);
@@ -221,6 +372,23 @@ export function computeScore(
     structural_physical:   Math.round(sp),
     risk_composite:        Math.round(rc),
   };
+
+  let weights = baseWeights;
+  let weight_adjustments: WeightAdjustment[] | undefined = undefined;
+
+  if (verifiedEvidence && verifiedEvidence.length > 0) {
+    const llmResult = await adjustWeightsWithLLM(
+      baseWeights,
+      verifiedEvidence,
+      intent,
+      lifecycle,
+      macro,
+    );
+    if (llmResult) {
+      weights = llmResult.adjustedWeights;
+      weight_adjustments = llmResult.adjustments;
+    }
+  }
 
   const score_composite = Math.round(
     li * weights.location_intelligence +
@@ -251,6 +419,10 @@ export function computeScore(
     .filter(r => r.success)
     .map(r => r.source);
 
+  if (weight_adjustments) {
+    breakdown.weight_adjustments = weight_adjustments;
+  }
+
   const methodologyPayload = JSON.stringify({
     BASE_WEIGHTS,
     weights,
@@ -258,8 +430,11 @@ export function computeScore(
     lifecycle,
     macro,
     version: env.CRUX_VERSION,
+    weight_adjustments: weight_adjustments ?? [],
   });
   const methodology_hash = createHash('sha256').update(methodologyPayload).digest('hex');
+
+  const verified_evidence_used = verifiedEvidence?.length ?? 0;
 
   const now = new Date();
   return {
@@ -278,5 +453,7 @@ export function computeScore(
     ttl_expires_at: new Date(now.getTime() + 86_400_000).toISOString(),
     degraded: confidence_score < 0.4,
     clarifications_requested: [] as ClarificationRequest[],
+    weight_adjustments,
+    verified_evidence_used,
   };
 }

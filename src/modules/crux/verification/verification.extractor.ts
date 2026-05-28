@@ -1,4 +1,4 @@
-import { geminiClient, GEMINI_MODELS } from '../../../lib/gemini'
+import { generateWithFallback, GEMINI_MODELS } from '../../../lib/gemini'
 import type { EvidenceItem, PropertyProfile, VerificationStatus } from '../shared/types'
 
 export interface VerificationAssessment {
@@ -35,16 +35,13 @@ Your job is to verify whether a candidate evidence item is supported, contradict
 
 Rules:
 1. Output ONLY valid JSON. No markdown fences.
-2. Use an internal ReAct-style loop:
-   - Observe the candidate evidence and peer evidence
-   - Check direct relevance to the property
-   - Check support and contradiction signals
-   - Decide the final verification status
-   Do not output the hidden reasoning.
-3. Allowed verification_status values: verified, contradicted, inconclusive, stale.
-4. Prefer "inconclusive" over overclaiming.
-5. If evidence is clearly outdated, use "stale".
-6. Include only evidence item IDs that were explicitly provided in the peer list.
+2. Allowed verification_status values: verified, contradicted, inconclusive, stale.
+3. Be permissive — if evidence is reasonably relevant and not clearly wrong, lean toward "verified".
+4. Use "contradicted" only when evidence directly conflicts with known facts or peer evidence.
+5. Use "stale" only when evidence is clearly outdated (mention timeframe in notes).
+6. Use "inconclusive" as a last resort, not a default.
+7. Include only evidence item IDs that were explicitly provided in the peer list.
+8. Provide specific, clear verification_notes explaining your reasoning.
 `.trim()
 }
 
@@ -131,39 +128,47 @@ export class GeminiEvidenceVerifier implements EvidenceVerifier {
       contradiction_score: number
     }
   }): Promise<VerificationAssessment> {
-    const model = geminiClient.getGenerativeModel({
-      model: GEMINI_MODELS.VERIFICATION_AGENT,
-      systemInstruction: buildSystemPrompt(),
-      generationConfig: {
+    try {
+      const raw = await generateWithFallback({
+        model: GEMINI_MODELS.VERIFICATION_AGENT,
+        systemInstruction: buildSystemPrompt(),
+        prompt: buildUserPrompt(params),
         temperature: 0.1,
         maxOutputTokens: 1024,
-      },
-    })
+      })
+      const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
+      const parsed = JSON.parse(clean) as Record<string, unknown>
 
-    const result = await model.generateContent(buildUserPrompt(params))
-    const raw = result.response.text().trim()
-    const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
-    const parsed = JSON.parse(clean) as Record<string, unknown>
+      const status = typeof parsed.verification_status === 'string' && ALLOWED_STATUSES.includes(parsed.verification_status as VerificationStatus)
+        ? parsed.verification_status as VerificationStatus
+        : 'inconclusive'
 
-    const status = typeof parsed.verification_status === 'string' && ALLOWED_STATUSES.includes(parsed.verification_status as VerificationStatus)
-      ? parsed.verification_status as VerificationStatus
-      : 'inconclusive'
+      const supportingIds = Array.isArray(parsed.supporting_evidence_ids)
+        ? parsed.supporting_evidence_ids.filter((value): value is string => typeof value === 'string')
+        : []
+      const contradictingIds = Array.isArray(parsed.contradicting_evidence_ids)
+        ? parsed.contradicting_evidence_ids.filter((value): value is string => typeof value === 'string')
+        : []
 
-    const supportingIds = Array.isArray(parsed.supporting_evidence_ids)
-      ? parsed.supporting_evidence_ids.filter((value): value is string => typeof value === 'string')
-      : []
-    const contradictingIds = Array.isArray(parsed.contradicting_evidence_ids)
-      ? parsed.contradicting_evidence_ids.filter((value): value is string => typeof value === 'string')
-      : []
-
-    return {
-      verification_status: status,
-      verifier_confidence: typeof parsed.verifier_confidence === 'number' ? parsed.verifier_confidence : 0.5,
-      support_score: typeof parsed.support_score === 'number' ? parsed.support_score : params.deterministic.support_score,
-      contradiction_score: typeof parsed.contradiction_score === 'number' ? parsed.contradiction_score : params.deterministic.contradiction_score,
-      supporting_evidence_ids: supportingIds,
-      contradicting_evidence_ids: contradictingIds,
-      verification_notes: typeof parsed.verification_notes === 'string' ? parsed.verification_notes : null,
+      return {
+        verification_status: status,
+        verifier_confidence: typeof parsed.verifier_confidence === 'number' ? parsed.verifier_confidence : 0.5,
+        support_score: typeof parsed.support_score === 'number' ? parsed.support_score : params.deterministic.support_score,
+        contradiction_score: typeof parsed.contradiction_score === 'number' ? parsed.contradiction_score : params.deterministic.contradiction_score,
+        supporting_evidence_ids: supportingIds,
+        contradicting_evidence_ids: contradictingIds,
+        verification_notes: typeof parsed.verification_notes === 'string' ? parsed.verification_notes : null,
+      }
+    } catch {
+      return {
+        verification_status: params.deterministic.freshness_ok ? 'inconclusive' : 'stale',
+        verifier_confidence: 0.6,
+        support_score: params.deterministic.support_score,
+        contradiction_score: params.deterministic.contradiction_score,
+        supporting_evidence_ids: [...params.deterministic.supporting_evidence_ids],
+        contradicting_evidence_ids: [...params.deterministic.contradicting_evidence_ids],
+        verification_notes: 'Gemini verification unavailable, using deterministic fallback.',
+      }
     }
   }
 }

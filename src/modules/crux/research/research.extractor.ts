@@ -1,4 +1,4 @@
-import { geminiClient, GEMINI_MODELS } from '../../../lib/gemini'
+import { generateWithFallback, GEMINI_MODELS } from '../../../lib/gemini'
 import type { EvidenceDomain, ExtractedEvidenceDraft, PropertyProfile } from '../shared/types'
 
 export interface ResearchExtractor {
@@ -23,28 +23,27 @@ const VALID_DOMAINS: EvidenceDomain[] = [
 
 function buildSystemPrompt(): string {
   return `
-You are the CRUX Research Evidence Extractor.
-
-Your only job is to extract verifiable property research evidence from grounded source text.
+You are the CRUX Research Evidence Extractor. Your job is to find and extract ANY factual information from source text that could be relevant to evaluating a property.
 
 Rules:
 1. Output ONLY valid JSON. No markdown fences.
-2. Output an array of objects.
+2. Output an array of 1-5 objects. Extract as many facts as you can find.
 3. Each object must contain:
    - domain: one of property, developer, locality, market, legal, environment
    - claim_text: a precise factual statement grounded in the source text
-   - normalized_claim: a compact JSON object with the core fact fields
+   - normalized_claim: a compact JSON object with core fact fields (numbers, dates, names, statuses)
    - observed_at: ISO timestamp if the source explicitly implies one, otherwise null
-   - confidence: number between 0 and 1
-4. Do not infer facts that are not explicitly supported.
-5. Do not produce generic advice or recommendations.
-6. If the text does not contain usable evidence, return [].
-7. Use an internal ReAct-style loop:
-   - Observe the source text
-   - Check whether each fact is explicit and source-grounded
-   - Extract only the facts that survive that check
-   Your final output must still be JSON only with no reasoning text.
-`.trim()
+   - confidence: number between 0 and 1 based on how directly the source supports the claim
+4. Be aggressive — extract ANY factual data that could relate to the property, its developer, its city, or its state, even indirectly.
+5. Examples of good claims:
+   - "Ahmedabad HPI shows 2.2% QoQ growth in Dec 2025" → domain: market, normalized: {city: "Ahmedabad", hpi_qoq: 2.2, period: "Dec 2025"}
+   - "Shivalik Developers registered under RERA MAA07768" → domain: developer, normalized: {developer: "Shivalik", rera_id: "MAA07768"}
+   - "Gujarat construction cost tier-1 is 2800 per sqft" → domain: market, normalized: {state: "Gujarat", cost_per_sqft: 2800, tier: "tier1"}
+   - "Bodakdev locality has metro connectivity planned for 2026" → domain: locality, normalized: {locality: "Bodakdev", metro_planned: "2026"}
+   - "Developer has 3 pending RERA complaints for delayed possession" → domain: legal, normalized: {developer: "...", pending_complaints: 3, type: "delayed possession"}
+6. For generic portal pages (RERA, government sites), extract facts about the regulatory framework, available data, recent circulars, or any numeric/metric data present.
+7. If the text mentions the property's city, state, developer, or similar locations, extract ALL related facts.
+8. Never fabricate — only extract what is explicitly present. But don't be too conservative — if a page about Gujarat RERA mentions Ahmedabad developers, that IS relevant.`.trim()
 }
 
 function buildUserPrompt(params: {
@@ -79,6 +78,45 @@ ${params.text}
 `.trim()
 }
 
+function recoverJson(text: string): string | null {
+  let recovered = text.trim()
+  let openBraces = 0
+  let openBrackets = 0
+  let inString = false
+  let escaped = false
+
+  for (let i = 0; i < recovered.length; i++) {
+    const ch = recovered[i]
+    if (escaped) { escaped = false; continue }
+    if (ch === '\\') { escaped = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') openBraces++
+    if (ch === '}') openBraces--
+    if (ch === '[') openBrackets++
+    if (ch === ']') openBrackets--
+  }
+
+  if (inString) {
+    const lastNewline = recovered.lastIndexOf('\n')
+    if (lastNewline > 0) {
+      recovered = recovered.slice(0, lastNewline) + '"}'
+    } else {
+      recovered += '"'
+    }
+  }
+
+  while (openBrackets > 0) { recovered += ']'; openBrackets-- }
+  while (openBraces > 0) { recovered += '}'; openBraces-- }
+
+  try {
+    JSON.parse(recovered)
+    return recovered
+  } catch {
+    return null
+  }
+}
+
 export class GeminiResearchExtractor implements ResearchExtractor {
   async extractEvidence(params: {
     property: PropertyProfile
@@ -88,41 +126,62 @@ export class GeminiResearchExtractor implements ResearchExtractor {
     text: string
     observedAt: string | null
   }): Promise<ExtractedEvidenceDraft[]> {
-    const model = geminiClient.getGenerativeModel({
-      model: GEMINI_MODELS.RESEARCH_AGENT,
-      systemInstruction: buildSystemPrompt(),
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 2048,
-      },
-    })
+    for (let attempt = 0; attempt <= 1; attempt++) {
+      try {
+        const raw = await generateWithFallback({
+          model: GEMINI_MODELS.RESEARCH_AGENT,
+          systemInstruction: buildSystemPrompt(),
+          prompt: buildUserPrompt(params),
+          temperature: 0.2,
+          maxOutputTokens: 4096,
+        })
+        const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
 
-    const result = await model.generateContent(buildUserPrompt(params))
-    const raw = result.response.text().trim()
-    const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
-    const parsed = JSON.parse(clean) as unknown
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(clean)
+        } catch {
+          const recovered = recoverJson(clean)
+          if (recovered) {
+            parsed = JSON.parse(recovered)
+          } else {
+            throw new Error('JSON_RECOVERY_FAILED')
+          }
+        }
 
-    if (!Array.isArray(parsed)) return []
+        if (!Array.isArray(parsed)) return []
 
-    const drafts: ExtractedEvidenceDraft[] = []
+        const drafts: ExtractedEvidenceDraft[] = []
 
-    for (const item of parsed) {
-      if (!item || typeof item !== 'object') continue
-      const record = item as Record<string, unknown>
-      const domain = typeof record.domain === 'string' ? record.domain : ''
-      if (!VALID_DOMAINS.includes(domain as EvidenceDomain)) continue
+        for (const item of parsed) {
+          if (!item || typeof item !== 'object') continue
+          const record = item as Record<string, unknown>
+          const domain = typeof record.domain === 'string' ? record.domain : ''
+          if (!VALID_DOMAINS.includes(domain as EvidenceDomain)) continue
 
-      drafts.push({
-        domain: domain as EvidenceDomain,
-        claim_text: typeof record.claim_text === 'string' ? record.claim_text : '',
-        normalized_claim: typeof record.normalized_claim === 'object' && record.normalized_claim
-          ? record.normalized_claim as Record<string, unknown>
-          : {},
-        observed_at: typeof record.observed_at === 'string' ? record.observed_at : null,
-        confidence: typeof record.confidence === 'number' ? record.confidence : 0,
-      })
+          drafts.push({
+            domain: domain as EvidenceDomain,
+            claim_text: typeof record.claim_text === 'string' ? record.claim_text : '',
+            normalized_claim: typeof record.normalized_claim === 'object' && record.normalized_claim
+              ? record.normalized_claim as Record<string, unknown>
+              : {},
+            observed_at: typeof record.observed_at === 'string' ? record.observed_at : null,
+            confidence: typeof record.confidence === 'number' ? record.confidence : 0.5,
+          })
+        }
+
+        return drafts
+      } catch (error) {
+        const msg = (error as Error)?.message?.slice(0, 100) ?? 'unknown'
+        if (attempt === 2) {
+          console.warn(`[extractor] exhausted retries: ${msg}`)
+          return []
+        }
+        const waitMs = 2000 * Math.pow(2, attempt)
+        console.warn(`[extractor] attempt ${attempt + 1} failed, retrying in ${waitMs}ms: ${msg}`)
+        await new Promise(resolve => setTimeout(resolve, waitMs))
+      }
     }
-
-    return drafts
+    return []
   }
 }

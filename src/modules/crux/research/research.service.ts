@@ -16,7 +16,6 @@ import { parseDocument, type ParsedDocument } from './research.documents'
 import { GeminiResearchExtractor, type ResearchExtractor } from './research.extractor'
 import {
   buildEvidenceDigest,
-  buildResearchQueries,
   buildResearchSummary,
   buildSeedUrlResults,
   classifyAuthorityTier,
@@ -24,9 +23,11 @@ import {
   computeEvidenceStatus,
   computeFreshnessExpiry,
   getAllowedDomains,
+  generateSmartQueries,
   isExpired,
+  type ResearchQuery,
 } from './research.policy'
-import { TavilyWebProvider, type ResearchWebProvider } from './research.web'
+import { FirecrawlWebProvider, type ResearchWebProvider } from './research.web'
 
 export interface ResearchRunResult {
   run: ResearchRunRow
@@ -153,7 +154,7 @@ class SupabaseResearchRepository implements ResearchRepository {
         property_id: input.property_id,
         status: 'running',
         initiated_by_surface: input.surface ?? 'api',
-        provider: 'tavily',
+        provider: 'firecrawl',
         seed_urls: input.seed_urls ?? [],
         document_paths: input.document_paths ?? [],
         summary_counts: {
@@ -175,7 +176,7 @@ class SupabaseResearchRepository implements ResearchRepository {
       .single()
 
     if (error || !data) {
-      throw new AppError(500, 'RESEARCH_RUN_CREATE_FAILED', 'Failed to create research run.')
+      throw new AppError(500, 'RESEARCH_RUN_CREATE_FAILED', (error as any)?.message ?? 'Failed to create research run.')
     }
 
     return data as ResearchRunRow
@@ -319,6 +320,14 @@ function capEvidence(items: EvidenceInsert[]): EvidenceInsert[] {
     .slice(0, env.CRUX_RESEARCH_MAX_EVIDENCE_ITEMS)
 }
 
+function extractDomainFromHint(domainHint: string | null): string | null {
+  if (!domainHint) return null
+  const match = domainHint.match(/site:([\w.-]+)/)
+  if (match?.[1]) return match[1]
+  if (domainHint.includes('.gov') || domainHint.includes('.nic')) return domainHint.trim()
+  return null
+}
+
 export class ResearchService {
   constructor(
     private readonly repository: ResearchRepository,
@@ -353,10 +362,11 @@ export class ResearchService {
     const ttlExpiresAt = new Date(nowDate.getTime() + env.CRUX_RESEARCH_TTL_HOURS * 60 * 60 * 1000).toISOString()
     const run = await this.repository.createRun(input, ttlExpiresAt)
     const allowedDomains = getAllowedDomains(input.seed_urls)
-    const queries = buildResearchQueries(property)
+    const smartQueries = await generateSmartQueries(property)
+    const queryStrings = smartQueries.map(q => q.query)
     const errors: string[] = []
 
-    const webPromise = this.collectWebSources(queries, input.seed_urls ?? [])
+    const webPromise = this.collectWebSources(smartQueries, input.seed_urls ?? [])
     const documentPromise = this.collectDocumentSources(input.document_paths ?? [])
 
     const [webSources, documentSources] = await Promise.all([webPromise, documentPromise])
@@ -369,72 +379,84 @@ export class ResearchService {
     const evidenceInserts: EvidenceInsert[] = []
     const seenClaimHashes = new Set<string>()
 
-    for (const source of extractSources) {
-      const chunks = chunkText(source.text_content)
-      for (const chunk of chunks) {
-        let drafts: ExtractedEvidenceDraft[] = []
-        try {
-          drafts = await this.extractor.extractEvidence({
-            property,
-            sourceTitle: source.source_title,
-            sourceUrl: source.source_url,
-            sourcePath: source.source_path,
-            text: chunk,
-            observedAt: source.observed_at,
-          })
-        } catch (error) {
-          errors.push(error instanceof Error ? error.message : 'EVIDENCE_EXTRACTION_FAILED')
-          continue
-        }
+    const CONCURRENCY = 5
+    for (let i = 0; i < extractSources.length; i += CONCURRENCY) {
+      const batch = extractSources.slice(i, i + CONCURRENCY)
+      const batchResults = await Promise.all(
+        batch.map(async (source) => {
+          const batchInserts: EvidenceInsert[] = []
+          const chunks = chunkText(source.text_content)
+          for (const chunk of chunks) {
+            let drafts: ExtractedEvidenceDraft[] = []
+            try {
+              drafts = await this.extractor.extractEvidence({
+                property,
+                sourceTitle: source.source_title,
+                sourceUrl: source.source_url,
+                sourcePath: source.source_path,
+                text: chunk,
+                observedAt: source.observed_at,
+              })
+            } catch (error) {
+              errors.push(error instanceof Error ? error.message : 'EVIDENCE_EXTRACTION_FAILED')
+              continue
+            }
 
-        for (const draft of drafts) {
-          const observedAt = draft.observed_at ?? source.observed_at ?? null
-          const freshnessExpiresAt = computeFreshnessExpiry(draft.domain, observedAt)
-          const authorityTier = classifyAuthorityTier(source.source_url, source.source_path, allowedDomains)
-          let { status, rejection_reason } = computeEvidenceStatus(
-            draft.claim_text,
-            source.excerpt,
-            authorityTier,
-            source.source_url,
-            source.source_path,
-            draft.confidence,
-          )
+            for (const draft of drafts) {
+              const observedAt = draft.observed_at ?? source.observed_at ?? null
+              const freshnessExpiresAt = computeFreshnessExpiry(draft.domain, observedAt)
+              const authorityTier = classifyAuthorityTier(source.source_url, source.source_path, allowedDomains)
+              let { status, rejection_reason } = computeEvidenceStatus(
+                draft.claim_text,
+                source.excerpt,
+                authorityTier,
+                source.source_url,
+                source.source_path,
+                draft.confidence,
+              )
 
-          if (isExpired(freshnessExpiresAt, this.now())) {
-            status = 'rejected'
-            rejection_reason = 'STALE_EVIDENCE'
+              if (isExpired(freshnessExpiresAt, this.now())) {
+                status = 'rejected'
+                rejection_reason = 'STALE_EVIDENCE'
+              }
+
+              const claimHash = computeClaimHash(
+                draft,
+                source.source_url ?? source.source_path ?? source.source_title,
+              )
+
+              if (seenClaimHashes.has(claimHash)) {
+                continue
+              }
+
+              seenClaimHashes.add(claimHash)
+              batchInserts.push({
+                run_id: run.id,
+                property_id: property.id,
+                domain: draft.domain,
+                source_kind: source.source_kind,
+                authority_tier: authorityTier,
+                status,
+                claim_text: draft.claim_text.trim(),
+                normalized_claim: draft.normalized_claim,
+                source_title: source.source_title,
+                source_url: source.source_url,
+                source_path: source.source_path,
+                excerpt: source.excerpt,
+                observed_at: observedAt,
+                freshness_expires_at: freshnessExpiresAt,
+                confidence: draft.confidence,
+                rejection_reason,
+                claim_hash: claimHash,
+              })
+            }
           }
+          return { inserts: batchInserts, errors: [] as string[] }
+        }),
+      )
 
-          const claimHash = computeClaimHash(
-            draft,
-            source.source_url ?? source.source_path ?? source.source_title,
-          )
-
-          if (seenClaimHashes.has(claimHash)) {
-            continue
-          }
-
-          seenClaimHashes.add(claimHash)
-          evidenceInserts.push({
-            run_id: run.id,
-            property_id: property.id,
-            domain: draft.domain,
-            source_kind: source.source_kind,
-            authority_tier: authorityTier,
-            status,
-            claim_text: draft.claim_text.trim(),
-            normalized_claim: draft.normalized_claim,
-            source_title: source.source_title,
-            source_url: source.source_url,
-            source_path: source.source_path,
-            excerpt: source.excerpt,
-            observed_at: observedAt,
-            freshness_expires_at: freshnessExpiresAt,
-            confidence: draft.confidence,
-            rejection_reason,
-            claim_hash: claimHash,
-          })
-        }
+      for (const result of batchResults) {
+        evidenceInserts.push(...result.inserts)
       }
     }
 
@@ -443,7 +465,7 @@ export class ResearchService {
       savedEvidence,
       documentSources.documents.length,
       documentSources.documents.filter((document) => document.parse_status !== 'parsed').length,
-      queries.length,
+      queryStrings.length,
       webSources.resultCount,
     )
 
@@ -462,7 +484,7 @@ export class ResearchService {
       inputPayload: {
         property_id: property.id,
         surface: input.surface ?? 'api',
-        queries,
+        queries: queryStrings,
         seed_urls: input.seed_urls ?? [],
         document_paths: input.document_paths ?? [],
       },
@@ -510,78 +532,153 @@ export class ResearchService {
     return 'failed'
   }
 
-  private async collectWebSources(queries: string[], seedUrls: string[]): Promise<{
+  private async collectWebSources(queries: ResearchQuery[], seedUrls: string[]): Promise<{
     sources: ExtractSource[]
     resultCount: number
     errors: string[]
   }> {
     const errors: string[] = []
-    const urlMap = new Map<string, { title: string; raw_content: string | null; published_at: string | null }>()
+    const urlMap = new Map<string, { title: string; raw_content: string | null; snippet: string; published_at: string | null }>()
 
     for (const result of buildSeedUrlResults(seedUrls)) {
       urlMap.set(result.url, {
         title: result.title,
         raw_content: result.raw_content,
+        snippet: result.snippet,
         published_at: result.published_at,
       })
     }
 
-    for (const query of queries) {
-      try {
-        const results = await this.webProvider.search(query, {
-          maxResults: env.CRUX_RESEARCH_MAX_WEB_RESULTS,
-        })
-        for (const result of results) {
-          if (!urlMap.has(result.url)) {
-            urlMap.set(result.url, {
-              title: result.title,
-              raw_content: result.raw_content,
-              published_at: result.published_at,
-            })
+    for (const queryInfo of queries) {
+      const strategyResults = await Promise.allSettled([
+        this.executeSearchStrategy(queryInfo),
+        this.executeMapStrategy(queryInfo),
+        this.executeDeepResearchStrategy(queryInfo),
+      ])
+
+      for (const settled of strategyResults) {
+        if (settled.status === 'fulfilled') {
+          for (const result of settled.value) {
+            if (!urlMap.has(result.url)) {
+              urlMap.set(result.url, {
+                title: result.title,
+                raw_content: result.raw_content,
+                snippet: result.snippet,
+                published_at: result.published_at,
+              })
+            }
           }
         }
-      } catch (error) {
-        errors.push(error instanceof Error ? error.message : 'WEB_SEARCH_FAILED')
       }
     }
 
-    const sourceEntries = Array.from(urlMap.entries()).slice(0, env.CRUX_RESEARCH_MAX_WEB_RESULTS)
-    const sources: ExtractSource[] = []
+    const sourceEntries = Array.from(urlMap.entries()).slice(0, 20)
 
-    for (const [url, metadata] of sourceEntries) {
-      try {
-        if (metadata.raw_content) {
-          sources.push({
-            source_kind: 'web',
-            source_title: metadata.title,
-            source_url: url,
-            source_path: null,
-            observed_at: metadata.published_at,
-            excerpt: metadata.raw_content.slice(0, 280),
-            text_content: metadata.raw_content,
-          })
-          continue
+    const urlsWithoutContent = sourceEntries
+      .filter(([, m]) => !m.raw_content)
+      .map(([url]) => url)
+
+    if (urlsWithoutContent.length > 0) {
+      const provider = this.webProvider as FirecrawlWebProvider
+      if (provider.fetchPages) {
+        try {
+          const batchContent = await provider.fetchPages(urlsWithoutContent)
+          for (const [url, content] of batchContent) {
+            const entry = urlMap.get(url)
+            if (entry) entry.raw_content = content
+          }
+        } catch (error) {
+          errors.push(`BATCH_SCRAPE_FAILED: ${(error as Error)?.message ?? 'unknown'}`)
         }
-
-        const page = await this.webProvider.fetchPage(url)
-        sources.push({
-          source_kind: 'web',
-          source_title: metadata.title || page.title,
-          source_url: page.url,
-          source_path: null,
-          observed_at: metadata.published_at,
-          excerpt: page.excerpt,
-          text_content: page.text_content,
-        })
-      } catch (error) {
-        errors.push(error instanceof Error ? error.message : 'WEB_PAGE_FETCH_FAILED')
       }
     }
 
-    return {
-      sources,
-      resultCount: sourceEntries.length,
-      errors,
+    const sources: ExtractSource[] = []
+    for (const [url, metadata] of sourceEntries) {
+      const textContent = metadata.raw_content || metadata.snippet || ''
+      if (!textContent || textContent.length < 50) continue
+      sources.push({
+        source_kind: 'web',
+        source_title: metadata.title,
+        source_url: url,
+        source_path: null,
+        observed_at: metadata.published_at,
+        excerpt: textContent.slice(0, 280),
+        text_content: textContent,
+      })
+    }
+
+    return { sources, resultCount: sourceEntries.length, errors }
+  }
+
+  private async executeSearchStrategy(queryInfo: ResearchQuery): Promise<Array<{ title: string; url: string; raw_content: string | null; snippet: string; published_at: string | null }>> {
+    try {
+      const results = await this.webProvider.search(queryInfo.query, { maxResults: 3 })
+      return results.map((r) => ({
+        title: r.title,
+        url: r.url,
+        raw_content: r.raw_content,
+        snippet: r.snippet,
+        published_at: r.published_at,
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  private async executeMapStrategy(queryInfo: ResearchQuery): Promise<Array<{ title: string; url: string; raw_content: string | null; snippet: string; published_at: string | null }>> {
+    if (!queryInfo.domain_hint) return []
+
+    const domain = extractDomainFromHint(queryInfo.domain_hint)
+    if (!domain) return []
+
+    try {
+      const provider = this.webProvider as FirecrawlWebProvider
+      if (!provider.mapDomain) return []
+
+      const mappedUrls = await provider.mapDomain(`https://${domain}`, queryInfo.query)
+      if (mappedUrls.length === 0) return []
+
+      const topUrls = mappedUrls.slice(0, 10)
+      if (provider.fetchPages) {
+        const contentMap = await provider.fetchPages(topUrls)
+        return topUrls.map((url) => ({
+          title: url,
+          url,
+          raw_content: contentMap.get(url) ?? null,
+          snippet: (contentMap.get(url) ?? '').slice(0, 280),
+          published_at: null,
+        }))
+      }
+      return topUrls.map((url) => ({
+        title: url,
+        url,
+        raw_content: null,
+        snippet: '',
+        published_at: null,
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  private async executeDeepResearchStrategy(queryInfo: ResearchQuery): Promise<Array<{ title: string; url: string; raw_content: string | null; snippet: string; published_at: string | null }>> {
+    const tier = queryInfo.authority_tier
+    if (tier !== 'official' && tier !== 'primary') return []
+
+    try {
+      const provider = this.webProvider as FirecrawlWebProvider
+      if (!provider.deepResearch) return []
+      const results = await provider.deepResearch(queryInfo.query, queryInfo.domain_hint)
+      return results.map((r) => ({
+        title: r.title,
+        url: r.url,
+        raw_content: r.raw_content,
+        snippet: r.snippet,
+        published_at: r.published_at,
+      }))
+    } catch {
+      return []
     }
   }
 
@@ -632,7 +729,7 @@ export class ResearchService {
 export function createResearchService(): ResearchService {
   return new ResearchService(
     new SupabaseResearchRepository(),
-    new TavilyWebProvider(),
+    new FirecrawlWebProvider(),
     new GeminiResearchExtractor(),
   )
 }

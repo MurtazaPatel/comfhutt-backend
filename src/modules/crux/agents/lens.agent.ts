@@ -56,10 +56,19 @@ CRUX Score for this property (intent: ${score.intent_profile}):
 - Confidence: ${(score.confidence_score * 100).toFixed(0)}%
 - Score Breakdown: ${JSON.stringify(score.score_breakdown, null, 2)}
 - Data Sources Used: ${score.data_sources_used.join(', ')}
+- Verified Evidence Used: ${score.verified_evidence_used ?? 0} items
 - Scored At: ${score.created_at}
 - CRUX Version: ${score.crux_version}
 ` : `
 No CRUX Score has been computed for this property yet. If the user asks about the score, you can offer to trigger one by using the triggerScore function tool.
+`}
+
+## LAYER 3D — SCORING METHODOLOGY (transparency layer)
+${score?.weight_adjustments?.length ? `
+The CRUX Score for this property incorporates the following evidence-backed weight adjustments:
+${score.weight_adjustments.map(a => `- ${a.category}: weight shifted by ${a.delta > 0 ? '+' : ''}${a.delta.toFixed(3)} because ${a.reason}`).join('\n')}
+` : `
+No evidence-backed weight adjustments were applied for this property.
 `}
 
 ## LAYER 3B — RESEARCH EVIDENCE CONTEXT
