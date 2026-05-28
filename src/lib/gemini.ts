@@ -116,3 +116,19 @@ export async function generateWithFallback(params: LlmGenerateParams): Promise<s
     throw geminiError
   }
 }
+
+export async function generateWithRace(params: LlmGenerateParams): Promise<string> {
+  if (!KIMI_ENABLED) return callGemini(params)
+
+  try {
+    return await Promise.race([
+      callGemini(params).catch((err) => {
+        console.warn(`[llm] Gemini lost race: ${(err as Error)?.message?.slice(0, 80)}`)
+        return new Promise<string>(() => {})
+      }),
+      callKimi(params),
+    ])
+  } catch {
+    return callGemini(params)
+  }
+}

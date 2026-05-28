@@ -313,56 +313,69 @@ export class VerificationService {
     const evidenceItems = [...research.digest.accepted_items, ...research.digest.weak_items]
     const errors: string[] = []
     const inserts: VerificationInsert[] = []
+    const verifier = this.verifier
 
-    for (const evidence of evidenceItems) {
-      const peers = evidenceItems.filter((peer) => peer.id !== evidence.id)
-      const deterministic = computeDeterministicSignals(evidence, peers, property, nowDate)
+    for (let i = 0; i < evidenceItems.length; i += 5) {
+      const batch = evidenceItems.slice(i, i + 5)
+      const batchResults = await Promise.all(
+        batch.map(async (evidence) => {
+          const peers = evidenceItems.filter((peer) => peer.id !== evidence.id)
+          const deterministic = computeDeterministicSignals(evidence, peers, property, nowDate)
 
-      let assessment: VerificationAssessment = {
-        verification_status: deterministic.freshness_ok ? 'inconclusive' : 'stale',
-        verifier_confidence: 0.5,
-        support_score: deterministic.support_score,
-        contradiction_score: deterministic.contradiction_score,
-        supporting_evidence_ids: deterministic.supporting_evidence_ids,
-        contradicting_evidence_ids: deterministic.contradicting_evidence_ids,
-        verification_notes: deterministic.direct_match
-          ? 'Deterministic verification fallback used.'
-          : 'Entity match is weak; deterministic verification fallback used.',
+          let assessment: VerificationAssessment = {
+            verification_status: deterministic.freshness_ok ? 'inconclusive' : 'stale',
+            verifier_confidence: 0.5,
+            support_score: deterministic.support_score,
+            contradiction_score: deterministic.contradiction_score,
+            supporting_evidence_ids: deterministic.supporting_evidence_ids,
+            contradicting_evidence_ids: deterministic.contradicting_evidence_ids,
+            verification_notes: deterministic.direct_match
+              ? 'Deterministic verification fallback used.'
+              : 'Entity match is weak; deterministic verification fallback used.',
+          }
+
+          try {
+            assessment = await verifier.verifyEvidence({
+              property,
+              evidence,
+              peers,
+              deterministic,
+            })
+          } catch {
+            return { item: null, error: 'EVIDENCE_VERIFICATION_FAILED' }
+          }
+
+          const verification_status = finalizeVerificationStatus(evidence, deterministic, assessment)
+          return {
+            item: {
+              run_id: run.id,
+              property_id: property.id,
+              research_run_id: research.run.id,
+              evidence_item_id: evidence.id,
+              verification_status,
+              verifier_confidence: assessment.verifier_confidence,
+              direct_match: deterministic.direct_match,
+              freshness_ok: deterministic.freshness_ok,
+              support_score: Math.max(deterministic.support_score, assessment.support_score),
+              contradiction_score: Math.max(deterministic.contradiction_score, assessment.contradiction_score),
+              supporting_evidence_ids: Array.from(new Set([
+                ...deterministic.supporting_evidence_ids,
+                ...assessment.supporting_evidence_ids,
+              ])),
+              contradicting_evidence_ids: Array.from(new Set([
+                ...deterministic.contradicting_evidence_ids,
+                ...assessment.contradicting_evidence_ids,
+              ])),
+              verification_notes: assessment.verification_notes,
+            } as VerificationInsert,
+            error: null,
+          }
+        }),
+      )
+      for (const result of batchResults) {
+        if (result.item) inserts.push(result.item)
+        if (result.error) errors.push(result.error)
       }
-
-      try {
-        assessment = await this.verifier.verifyEvidence({
-          property,
-          evidence,
-          peers,
-          deterministic,
-        })
-      } catch (error) {
-        errors.push(error instanceof Error ? error.message : 'EVIDENCE_VERIFICATION_FAILED')
-      }
-
-      const verification_status = finalizeVerificationStatus(evidence, deterministic, assessment)
-      inserts.push({
-        run_id: run.id,
-        property_id: property.id,
-        research_run_id: research.run.id,
-        evidence_item_id: evidence.id,
-        verification_status,
-        verifier_confidence: assessment.verifier_confidence,
-        direct_match: deterministic.direct_match,
-        freshness_ok: deterministic.freshness_ok,
-        support_score: Math.max(deterministic.support_score, assessment.support_score),
-        contradiction_score: Math.max(deterministic.contradiction_score, assessment.contradiction_score),
-        supporting_evidence_ids: Array.from(new Set([
-          ...deterministic.supporting_evidence_ids,
-          ...assessment.supporting_evidence_ids,
-        ])),
-        contradicting_evidence_ids: Array.from(new Set([
-          ...deterministic.contradicting_evidence_ids,
-          ...assessment.contradicting_evidence_ids,
-        ])),
-        verification_notes: assessment.verification_notes,
-      })
     }
 
     const savedVerifications = await this.repository.saveVerifications(inserts)
