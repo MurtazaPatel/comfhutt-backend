@@ -1,5 +1,4 @@
 import { supabase } from '../../../lib/db';
-import { AppError } from '../shared/errors';
 import type {
   AggregatedFetcherOutput,
   EvidenceItem,
@@ -50,29 +49,18 @@ async function insertFetcherEvidence(
 export async function runUnifiedPipeline(
   property: PropertyProfile,
 ): Promise<UnifiedPipelineResult> {
-  const parallelResults = await Promise.allSettled([
-    fetchAllSources(property),
-    runResearch({
+  const fetcherOutput = await fetchAllSources(property)
+
+  let researchOutput: ResearchRunResult | null = null
+  try {
+    researchOutput = await runResearch({
       property_id: property.id,
       force_refresh: true,
       surface: 'api',
-    }),
-  ]);
-
-  const fetcherResult = parallelResults[0];
-  const researchResult = parallelResults[1];
-
-  if (fetcherResult.status === 'rejected') {
-    throw new AppError(
-      500,
-      'FETCHER_FAILED',
-      `Fetcher agent failed: ${(fetcherResult.reason as Error)?.message ?? 'unknown error'}`,
-    );
+    })
+  } catch (researchError) {
+    console.warn('[orchestrator] research failed:', (researchError as Error)?.message ?? 'unknown')
   }
-
-  const fetcherOutput = fetcherResult.value;
-  const researchOutput: ResearchRunResult | null =
-    researchResult.status === 'fulfilled' ? researchResult.value : null;
 
   let verificationOutput: VerificationRunResult | null = null;
   let verificationDigest: VerificationDigest | null = null;
