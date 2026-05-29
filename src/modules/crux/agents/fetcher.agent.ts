@@ -37,10 +37,10 @@ const BREAKER_OPTIONS: CircuitBreaker.Options = {
 };
 
 const BREAKER_OPTIONS_SLOW: CircuitBreaker.Options = {
-  timeout: 30000,
+  timeout: 60000,
   errorThresholdPercentage: 80,
   resetTimeout: 30000,
-  volumeThreshold: 5,
+  volumeThreshold: 3,
 };
 
 // ── Helper ───────────────────────────────────────────────────────────────────
@@ -168,12 +168,21 @@ const cpwdBreaker = new CircuitBreaker(fetchCpwd, BREAKER_OPTIONS_SLOW);
 export async function fetchAllSources(profile: PropertyProfile): Promise<AggregatedFetcherOutput> {
   const startTime = Date.now();
 
-  const [cpcbR, gmapsR, residexR, mca21R, ecourtsR, cpwdR] = await Promise.allSettled([
-    cpcbBreaker.fire(profile) as Promise<FetcherResult<CpcbAqiData>>,
+  const [gmapsR] = await Promise.allSettled([
     googleBreaker.fire(profile) as Promise<FetcherResult<GoogleMapsData>>,
+  ]);
+
+  const [cpcbR, residexR] = await Promise.allSettled([
+    cpcbBreaker.fire(profile) as Promise<FetcherResult<CpcbAqiData>>,
     residexBreaker.fire(profile) as Promise<FetcherResult<NhbResidexData>>,
+  ]);
+
+  const [mca21R, ecourtsR] = await Promise.allSettled([
     mca21Breaker.fire(profile) as Promise<FetcherResult<Mca21Data>>,
     ecourtsBreaker.fire(profile) as Promise<FetcherResult<EcourtsData>>,
+  ]);
+
+  const [cpwdR] = await Promise.allSettled([
     cpwdBreaker.fire(profile) as Promise<FetcherResult<CpwdData>>,
   ]);
 

@@ -12,14 +12,16 @@ export interface ResearchExtractor {
   }): Promise<ExtractedEvidenceDraft[]>
 }
 
-const VALID_DOMAINS: EvidenceDomain[] = [
-  'property',
-  'developer',
-  'locality',
-  'market',
-  'legal',
-  'environment',
-]
+function normalizeDomain(raw: string): EvidenceDomain | null {
+  const lower = raw.toLowerCase().trim().replace(/[\s_-]+/g, '')
+  if (lower.includes('property') || lower.includes('realestate') || lower.includes('project')) return 'property'
+  if (lower.includes('developer') || lower.includes('builder') || lower.includes('company') || lower.includes('corporat')) return 'developer'
+  if (lower.includes('locality') || lower.includes('location') || lower.includes('infrastruct') || lower.includes('metro') || lower.includes('transport') || lower.includes('publ')) return 'locality'
+  if (lower.includes('market') || lower.includes('pric') || lower.includes('trend') || lower.includes('valuation') || lower.includes('appreciat')) return 'market'
+  if (lower.includes('legal') || lower.includes('compliance') || lower.includes('regulation') || lower.includes('rera') || lower.includes('court')) return 'legal'
+  if (lower.includes('environment') || lower.includes('pollution') || lower.includes('quality') || lower.includes('aqi') || lower.includes('green') || lower.includes('sustain')) return 'environment'
+  return null
+}
 
 function buildSystemPrompt(): string {
   return `
@@ -116,8 +118,9 @@ export class GeminiResearchExtractor implements ResearchExtractor {
         for (const item of parsed) {
           if (!item || typeof item !== 'object') continue
           const record = item as Record<string, unknown>
-          const domain = typeof record.domain === 'string' ? record.domain : ''
-          if (!VALID_DOMAINS.includes(domain as EvidenceDomain)) continue
+          const rawDomain = typeof record.domain === 'string' ? record.domain : ''
+          const domain = normalizeDomain(rawDomain)
+          if (!domain) continue
 
           const draft: ExtractedEvidenceDraft = {
             domain: domain as EvidenceDomain,
