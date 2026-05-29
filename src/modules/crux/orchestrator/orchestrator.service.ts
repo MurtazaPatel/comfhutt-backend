@@ -55,7 +55,6 @@ export async function runUnifiedPipeline(
   try {
     researchOutput = await runResearch({
       property_id: property.id,
-      force_refresh: true,
       surface: 'api',
     })
   } catch (researchError) {

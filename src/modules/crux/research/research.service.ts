@@ -24,6 +24,7 @@ import {
   computeFreshnessExpiry,
   getAllowedDomains,
   generateSmartQueries,
+  getCityAuthorityUrls,
   isExpired,
   type ResearchQuery,
 } from './research.policy'
@@ -375,7 +376,38 @@ export class ResearchService {
 
     await this.repository.saveDocuments(run.id, documentSources.documents)
 
-    const extractSources = [...webSources.sources, ...documentSources.sources]
+    let allSources = [...webSources.sources, ...documentSources.sources]
+
+    if (allSources.length === 0) {
+      const cityUrls = getCityAuthorityUrls(property.city)
+      if (cityUrls.length > 0) {
+        console.log(`[research] search returned 0 results, falling back to ${cityUrls.length} city authority URLs for ${property.city}`)
+        const provider = this.webProvider as FirecrawlWebProvider
+        try {
+          const contentMap = provider.fetchPages
+            ? await provider.fetchPages(cityUrls)
+            : new Map<string, string>()
+          for (const url of cityUrls) {
+            const content = contentMap.get(url) ?? ''
+            if (content.length >= 20) {
+              allSources.push({
+                source_kind: 'web',
+                source_title: url,
+                source_url: url,
+                source_path: null,
+                observed_at: null,
+                excerpt: content.slice(0, 280),
+                text_content: content,
+              })
+            }
+          }
+        } catch (err) {
+          errors.push(`CITY_AUTHORITY_SCRAPE_FAILED: ${(err as Error)?.message ?? 'unknown'}`)
+        }
+      }
+    }
+
+    const extractSources = allSources
     const evidenceInserts: EvidenceInsert[] = []
     const seenClaimHashes = new Set<string>()
 

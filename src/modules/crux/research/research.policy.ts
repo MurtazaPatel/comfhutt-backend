@@ -54,6 +54,70 @@ const PRIMARY_TIER_DOMAINS = [
   'liasesforas.com',
 ]
 
+const CITY_AUTHORITY_URLS: Record<string, string[]> = {
+  ahmedabad: [
+    'https://gujrera.gujarat.gov.in/',
+    'https://udd.gujarat.gov.in/Projects/Metro',
+    'https://ahmedabadcity.gov.in/',
+    'https://www.gujarat.gov.in/',
+  ],
+  mumbai: [
+    'https://maharera.maharashtra.gov.in/',
+    'https://mumbaicity.gov.in/',
+    'https://www.maharashtra.gov.in/',
+  ],
+  pune: [
+    'https://maharera.maharashtra.gov.in/',
+    'https://www.pmc.gov.in/',
+    'https://www.maharashtra.gov.in/',
+  ],
+  delhi: [
+    'https://rera.delhi.gov.in/',
+    'https://mcdonline.nic.in/',
+    'https://delhi.gov.in/',
+  ],
+  bangalore: [
+    'https://rera.karnataka.gov.in/',
+    'https://bbmp.gov.in/',
+    'https://www.karnataka.gov.in/',
+  ],
+  bengaluru: [
+    'https://rera.karnataka.gov.in/',
+    'https://bbmp.gov.in/',
+    'https://www.karnataka.gov.in/',
+  ],
+  hyderabad: [
+    'https://rera.telangana.gov.in/',
+    'https://www.ghmc.gov.in/',
+    'https://www.telangana.gov.in/',
+  ],
+  chennai: [
+    'https://rera.tn.gov.in/',
+    'https://chennaicorporation.gov.in/',
+    'https://www.tn.gov.in/',
+  ],
+  kolkata: [
+    'https://rera.wb.gov.in/',
+    'https://www.kmcgov.in/',
+    'https://wb.gov.in/',
+  ],
+  jaipur: [
+    'https://rera.rajasthan.gov.in/',
+    'https://jaipurmc.org/',
+    'https://rajasthan.gov.in/',
+  ],
+  lucknow: [
+    'https://up-rera.in/',
+    'https://lmc.up.nic.in/',
+    'https://up.gov.in/',
+  ],
+}
+
+export function getCityAuthorityUrls(city: string): string[] {
+  const key = city.toLowerCase().trim().replace(/\s+/g, '')
+  return CITY_AUTHORITY_URLS[key] ?? []
+}
+
 const FRESHNESS_DAYS: Record<EvidenceDomain, number> = {
   property: 180,
   developer: 180,
