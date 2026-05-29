@@ -152,7 +152,7 @@ export async function generate(params: LlmGenerateParams): Promise<string> {
 }
 
 export function safeJsonParse<T>(raw: string): T | null {
-  let text = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
+  let text = raw.trim().replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim()
 
   const tryParse = (s: string): T | null => {
     try { return JSON.parse(s) } catch { return null }
@@ -188,7 +188,7 @@ export function safeJsonParse<T>(raw: string): T | null {
 }
 
 export function safeJsonExtractArray(raw: string): unknown[] {
-  let text = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
+  let text = raw.trim().replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim()
 
   const arr = safeJsonParse<unknown[]>(text)
   if (Array.isArray(arr)) return arr
