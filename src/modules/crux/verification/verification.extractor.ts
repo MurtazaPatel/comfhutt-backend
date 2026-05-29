@@ -1,4 +1,4 @@
-import { generateWithFallback, GEMINI_MODELS } from '../../../lib/gemini'
+import { generate, safeJsonParse } from '../../../lib/llm'
 import type { EvidenceItem, PropertyProfile, VerificationStatus } from '../shared/types'
 
 export interface VerificationAssessment {
@@ -127,15 +127,15 @@ export class GeminiEvidenceVerifier implements EvidenceVerifier {
     }
   }): Promise<VerificationAssessment> {
     try {
-      const raw = await generateWithFallback({
-        model: GEMINI_MODELS.VERIFICATION_AGENT,
+      const raw = await generate({
+        strategy: 'primary',
         systemInstruction: buildSystemPrompt(),
         prompt: buildUserPrompt(params),
         temperature: 0.1,
         maxOutputTokens: 2048,
       })
       const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
-      const parsed = JSON.parse(clean) as Record<string, unknown>
+      const parsed = safeJsonParse<Record<string, unknown>>(clean) ?? {}
 
       const status = typeof parsed.verification_status === 'string' && ALLOWED_STATUSES.includes(parsed.verification_status as VerificationStatus)
         ? parsed.verification_status as VerificationStatus

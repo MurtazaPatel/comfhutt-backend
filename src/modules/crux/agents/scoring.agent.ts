@@ -7,7 +7,7 @@
 // - CruxScore uses `degraded` (not `degraded_data`)
 
 import { createHash } from 'crypto';
-import { generateWithFallback, GEMINI_MODELS } from '../../../lib/gemini';
+import { generate, safeJsonParse } from '../../../lib/llm';
 import { env } from '../../../config/env';
 import type {
   AggregatedFetcherOutput,
@@ -72,28 +72,6 @@ function buildWeights(
   const sum = (Object.values(w) as number[]).reduce((a, b) => a + b, 0);
   (Object.keys(w) as ScoringCategory[]).forEach(k => { w[k] /= sum; });
   return w;
-}
-
-function recoverScoringJson(text: string): string | null {
-  let recovered = text.trim()
-  let openBraces = 0, openBrackets = 0, inString = false, escaped = false
-  for (let i = 0; i < recovered.length; i++) {
-    const ch = recovered[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === '\\') { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === '{') openBraces++
-    if (ch === '}') openBraces--
-    if (ch === '[') openBrackets++
-    if (ch === ']') openBrackets--
-  }
-  if (inString) { recovered += '"}'
-    try { JSON.parse(recovered); return recovered } catch { return null }
-  }
-  while (openBrackets > 0) { recovered += ']'; openBrackets-- }
-  while (openBraces > 0) { recovered += '}'; openBraces-- }
-  try { JSON.parse(recovered); return recovered } catch { return null }
 }
 
 function scoreLocationIntelligence(
@@ -329,8 +307,8 @@ Weight adjustments should reflect REAL PROPERTY-SPECIFIC information:
 - Environmental concerns (AQI data, flood risks) → adjust environment-related weights`;
 
   try {
-    let text = await generateWithFallback({
-      model: GEMINI_MODELS.SCORING_AGENT,
+    let text = await generate({
+      strategy: 'primary',
       systemInstruction: systemPrompt,
       prompt: userPrompt,
       temperature: 0.1,
@@ -343,26 +321,13 @@ Weight adjustments should reflect REAL PROPERTY-SPECIFIC information:
     }
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('[scoring.agent] LLM response contained no JSON object:', text.slice(0, 200));
-      return null;
-    }
+    if (!jsonMatch) return null;
 
-    let parsed: LLMAdjustmentResponse;
-    try {
-      parsed = JSON.parse(jsonMatch[0]);
-    } catch (parseErr) {
-      const recovered = recoverScoringJson(jsonMatch[0])
-      if (recovered) {
-        try { parsed = JSON.parse(recovered) } catch { return null }
-      } else {
-        console.error('[scoring.agent] LLM JSON parse failed:', (parseErr as Error)?.message, '| raw:', jsonMatch[0].slice(0, 200));
-        return null;
-      }
+    const parsed = safeJsonParse<LLMAdjustmentResponse>(jsonMatch[0])
+    if (parsed && parsed.adjustments && Array.isArray(parsed.adjustments)) {
+      return validateAndClampAdjustments(parsed, baseWeights, verifiedEvidence);
     }
-    if (!parsed.adjustments || !Array.isArray(parsed.adjustments)) return null;
-
-    return validateAndClampAdjustments(parsed, baseWeights, verifiedEvidence);
+    return null;
   } catch (error) {
     console.error('[scoring.agent] LLM weight adjustment failed:', (error as Error)?.message ?? 'unknown');
     return null;

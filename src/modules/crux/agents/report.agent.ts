@@ -1,4 +1,4 @@
-import { geminiClient, GEMINI_MODELS, REPORT_CONFIG } from '../../../lib/gemini'
+import { geminiClient, GEMINI_MODELS, REPORT_CONFIG } from '../../../lib/llm'
 import { supabase } from '../../../lib/db'
 import { AppError } from '../shared/errors'
 import { getOrComputeScore } from '../scoring'

@@ -1,4 +1,4 @@
-import { generateWithFallback, GEMINI_MODELS } from '../../../lib/gemini'
+import { generate, safeJsonParse, safeJsonExtractArray } from '../../../lib/llm'
 import type { EvidenceDomain, ExtractedEvidenceDraft, PropertyProfile } from '../shared/types'
 
 export interface ResearchExtractor {
@@ -78,48 +78,6 @@ ${params.text}
 `.trim()
 }
 
-function recoverJson(text: string): string | null {
-  let recovered = text.trim()
-
-  const lastComma = recovered.lastIndexOf(',')
-  if (lastComma > recovered.length * 0.85) {
-    recovered = recovered.slice(0, lastComma)
-  }
-
-  recovered = recovered.replace(/,\s*$/, '')
-
-  let openBraces = 0, openBrackets = 0, inString = false, escaped = false
-  for (let i = 0; i < recovered.length; i++) {
-    const ch = recovered[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === '\\') { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === '{') openBraces++
-    if (ch === '}') openBraces--
-    if (ch === '[') openBrackets++
-    if (ch === ']') openBrackets--
-  }
-
-  if (inString) recovered += '"'
-  while (openBrackets > 0) { recovered += ']'; openBrackets-- }
-  while (openBraces > 0) { recovered += '}'; openBraces-- }
-
-  try { JSON.parse(recovered); return recovered } catch { return null }
-}
-
-function tryExtractPartialArray(text: string): unknown[] {
-  const items: unknown[] = []
-  const objectPattern = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g
-  let match
-  while ((match = objectPattern.exec(text)) !== null) {
-    try {
-      items.push(JSON.parse(match[0]))
-    } catch {}
-  }
-  return items
-}
-
 export class GeminiResearchExtractor implements ResearchExtractor {
   async extractEvidence(params: {
     property: PropertyProfile
@@ -131,8 +89,8 @@ export class GeminiResearchExtractor implements ResearchExtractor {
   }): Promise<ExtractedEvidenceDraft[]> {
     for (let attempt = 0; attempt <= 2; attempt++) {
       try {
-        const raw = await generateWithFallback({
-          model: GEMINI_MODELS.RESEARCH_AGENT,
+        const raw = await generate({
+          strategy: 'reasoning',
           systemInstruction: buildSystemPrompt(),
           prompt: buildUserPrompt(params),
           temperature: attempt === 0 ? 0.2 : 0.4,
@@ -140,23 +98,15 @@ export class GeminiResearchExtractor implements ResearchExtractor {
         })
         const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
 
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(clean)
-        } catch {
-          const recovered = recoverJson(clean)
-          if (recovered) {
-            try { parsed = JSON.parse(recovered) } catch {}
-          }
-          if (!parsed) {
-            const partial = tryExtractPartialArray(clean)
-            if (partial.length > 0) {
-              parsed = partial
-            } else if (attempt < 2) {
-              throw new Error('JSON_RECOVERY_FAILED')
-            } else {
-              return []
-            }
+        let parsed = safeJsonParse<unknown>(clean)
+        if (!Array.isArray(parsed)) {
+          const partial = safeJsonExtractArray(clean)
+          if (partial.length > 0) {
+            parsed = partial
+          } else if (attempt < 2) {
+            throw new Error('JSON_RECOVERY_FAILED')
+          } else {
+            return []
           }
         }
 

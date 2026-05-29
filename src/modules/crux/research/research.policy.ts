@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { env } from '../../../config/env'
-import { generateWithFallback, GEMINI_MODELS } from '../../../lib/gemini'
+import { generate, safeJsonParse } from '../../../lib/llm'
 import type {
   EvidenceAuthorityTier,
   EvidenceDomain,
@@ -88,26 +88,6 @@ export function extractHostname(url: string | null | undefined): string | null {
 
 function matchesDomain(hostname: string, candidate: string): boolean {
   return hostname === candidate || hostname.endsWith(`.${candidate}`)
-}
-
-function recoverJson(text: string): string | null {
-  let recovered = text.trim()
-  let openBraces = 0, openBrackets = 0, inString = false, escaped = false
-  for (let i = 0; i < recovered.length; i++) {
-    const ch = recovered[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === '\\') { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === '{') openBraces++
-    if (ch === '}') openBraces--
-    if (ch === '[') openBrackets++
-    if (ch === ']') openBrackets--
-  }
-  if (inString) { recovered += '"' }
-  while (openBrackets > 0) { recovered += ']'; openBrackets-- }
-  while (openBraces > 0) { recovered += '}'; openBraces-- }
-  try { JSON.parse(recovered); return recovered } catch { return null }
 }
 
 export function isAllowedDomain(url: string | null | undefined, allowedDomains: string[]): boolean {
@@ -378,25 +358,15 @@ Generate 8-12 creative, high-signal search queries for this property.
 Respond with ONLY a JSON array — no markdown, no explanation.`
 
   try {
-    const raw = await generateWithFallback({
-      model: GEMINI_MODELS.RESEARCH_AGENT,
+    const raw = await generate({
+      strategy: 'reasoning',
       systemInstruction: systemPrompt,
       prompt: userPrompt,
       temperature: 0.7,
       maxOutputTokens: 8192,
     })
     const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(clean)
-    } catch {
-      const recovered = recoverJson(clean)
-      if (recovered) {
-        parsed = JSON.parse(recovered)
-      } else {
-        throw new Error('GEMINI_INVALID_JSON')
-      }
-    }
+    const parsed = safeJsonParse<unknown[]>(clean)
 
     if (!Array.isArray(parsed)) return buildResearchQueries(property).map(q => ({ query: q, rationale: '', authority_tier: 'secondary' as EvidenceAuthorityTier }))
 
@@ -429,23 +399,16 @@ Respond with ONLY a JSON array — no markdown, no explanation.`
     console.warn(`[research.policy] Gemini query generation failed (${errMsg}), retrying with Kimi K2.6...`)
     
     try {
-      const raw = await generateWithFallback({
-        model: GEMINI_MODELS.RESEARCH_AGENT,
+      const raw = await generate({
+        strategy: 'primary',
         systemInstruction: systemPrompt,
         prompt: userPrompt,
         temperature: 0.7,
         maxOutputTokens: 8192,
       })
       const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(clean)
-      } catch {
-        const recovered = recoverJson(clean)
-        if (recovered) parsed = JSON.parse(recovered)
-        else throw new Error('KIMI_INVALID_JSON')
-      }
-
+      const parsed = safeJsonParse<unknown[]>(clean)
+      if (!Array.isArray(parsed)) throw new Error('KIMI_INVALID_JSON')
       if (Array.isArray(parsed)) {
         const queries: ResearchQuery[] = []
         for (const item of parsed) {

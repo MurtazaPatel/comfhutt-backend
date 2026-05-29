@@ -1,6 +1,6 @@
 import type { Response } from 'express'
 import { type Content, type Tool, type Part, SchemaType } from '@google/generative-ai'
-import { geminiClient, LENS_CONFIG, GEMINI_MODELS } from '../../../lib/gemini'
+import { geminiClient, LENS_CONFIG, GEMINI_MODELS } from '../../../lib/llm'
 import { supabase } from '../../../lib/db'
 import { AppError } from '../shared/errors'
 import {

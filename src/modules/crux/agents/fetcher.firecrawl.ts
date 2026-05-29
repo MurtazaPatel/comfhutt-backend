@@ -1,4 +1,4 @@
-import { generateWithFallback, GEMINI_MODELS } from '../../../lib/gemini'
+import { generate, safeJsonParse } from '../../../lib/llm'
 import {
   firecrawlSearchBreaker,
   firecrawlScrapeBreaker,
@@ -243,8 +243,8 @@ RULES:
 
   for (let attempt = 0; attempt <= 2; attempt++) {
     try {
-      const raw = await generateWithFallback({
-        model: GEMINI_MODELS.FETCHER_AGENT,
+      const raw = await generate({
+        strategy: 'primary',
         systemInstruction: systemPrompt,
         prompt: userPrompt,
         temperature: 0.1,
@@ -252,19 +252,15 @@ RULES:
       })
       const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
 
-      try {
-        return JSON.parse(clean) as T
-      } catch {
-        const recovered = recoverJson(clean)
-        if (recovered) {
-          return JSON.parse(recovered) as T
-        }
-        const jsonMatch = clean.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          try { return JSON.parse(jsonMatch[0]) as T } catch { return null }
-        }
-        return null
+      const parsed = safeJsonParse<T>(clean)
+      if (parsed) return parsed
+
+      const jsonMatch = clean.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const matchParsed = safeJsonParse<T>(jsonMatch[0])
+        if (matchParsed) return matchParsed
       }
+      return null
     } catch (error) {
       const msg = (error as Error)?.message ?? 'unknown'
       if (attempt >= 2) {
@@ -280,45 +276,6 @@ RULES:
 }
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
-
-function recoverJson(text: string): string | null {
-  let recovered = text.trim()
-  let openBraces = 0
-  let openBrackets = 0
-  let inString = false
-  let escaped = false
-
-  for (let i = 0; i < recovered.length; i++) {
-    const ch = recovered[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === '\\') { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === '{') openBraces++
-    if (ch === '}') openBraces--
-    if (ch === '[') openBrackets++
-    if (ch === ']') openBrackets--
-  }
-
-  if (inString) {
-    const lastNewline = recovered.lastIndexOf('\n')
-    if (lastNewline > 0) {
-      recovered = recovered.slice(0, lastNewline) + '"}'
-    } else {
-      recovered += '"'
-    }
-  }
-
-  while (openBrackets > 0) { recovered += ']'; openBrackets-- }
-  while (openBraces > 0) { recovered += '}'; openBraces-- }
-
-  try {
-    JSON.parse(recovered)
-    return recovered
-  } catch {
-    return null
-  }
-}
 
 const CPCB_AQI_SCHEMA = {
   type: 'object',
