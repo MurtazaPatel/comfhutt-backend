@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { generateProperties } from "../lib/mock-data";
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * GET /api/properties

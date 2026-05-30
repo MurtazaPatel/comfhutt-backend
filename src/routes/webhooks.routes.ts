@@ -6,7 +6,7 @@ import { supabase } from '../lib/db';
 import { AppError } from '../modules/crux/shared/errors';
 import { env } from '../config/env';
 
-const router = Router();
+const router: Router = Router();
 
 // Clerk webhook event types we handle
 interface ClerkUserCreatedEvent {

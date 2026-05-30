@@ -10,7 +10,7 @@ import { AppError } from "../modules/crux/shared/errors";
 import { env } from "../config/env";
 import type { Request, Response, NextFunction } from "express";
 
-const router = Router();
+const router: Router = Router();
 const clerkClient = createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
 
 /**

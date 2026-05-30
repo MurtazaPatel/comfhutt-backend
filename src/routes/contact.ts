@@ -4,7 +4,7 @@ import { sendEmail } from "../lib/email";
 import { upsertLead, logLeadEvent } from "../services/leads";
 import { createContactMessage } from "../services/contact";
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * POST /api/contact

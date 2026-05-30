@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { requireAuth } from '../middleware/requireAuth';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * GET /plans

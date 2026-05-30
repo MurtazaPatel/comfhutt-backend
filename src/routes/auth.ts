@@ -7,7 +7,7 @@ import { requireAuth } from "../middleware/requireAuth";
 import { supabaseAuth } from "../lib/db";
 import { env } from "../config/env";
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * POST /api/auth/register

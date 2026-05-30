@@ -38,7 +38,7 @@ import {
   cardShareLimit,
 } from '../middleware/rateLimit.middleware';
 
-const router = Router();
+const router: Router = Router();
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/crux/health', (_req: Request, res: Response): void => {

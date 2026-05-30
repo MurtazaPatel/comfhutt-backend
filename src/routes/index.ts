@@ -12,7 +12,7 @@ import cruxRouter from "./crux";
 import searchesRouter from "./searches.routes";
 import billingRouter from "./billing.routes";
 
-const router = Router();
+const router: Router = Router();
 
 // ── Existing ────────────────────────────────────────
 router.use("/health", healthRouter);

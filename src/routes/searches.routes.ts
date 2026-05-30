@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/requireAuth';
 import { getRecentSearches } from '../services/searchHistory.service';
 import { AppError } from '../modules/crux/shared/errors';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * GET /searches/recent

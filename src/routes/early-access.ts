@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { joinEarlyAccess } from "../services/early-access";
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * POST /api/early-access

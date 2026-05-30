@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { developerDetailsSchema, propertyDetailsSchema } from "../validations/developer-onboarding";
 import { upsertOwner, createProperty, createPropertyDocuments } from "../services/onboarding";
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * POST /api/developer-onboarding

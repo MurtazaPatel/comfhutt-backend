@@ -4,7 +4,7 @@ import { choiceSchema } from "../validations/choices";
 import { upsertLead, logLeadEvent } from "../services/leads";
 import { createChoiceResponses } from "../services/choices";
 
-const router = Router();
+const router: Router = Router();
 
 // Basic in-memory rate limiting (for demo purposes, use Redis/Upstash in production)
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute

@@ -9,7 +9,7 @@ import {
   reauthHtml,
 } from "../emails/auth-templates";
 
-const router = Router();
+const router: Router = Router();
 
 router.post("/", async (req: Request, res: Response) => {
   try {
