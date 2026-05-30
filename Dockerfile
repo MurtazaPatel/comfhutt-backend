@@ -5,10 +5,17 @@ FROM --platform=linux/amd64 node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm ci --ignore-scripts
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+
+COPY packages/types/package.json ./packages/types/
+
+RUN pnpm install --frozen-lockfile --prod false
 
 COPY tsconfig.json ./
+COPY packages/types/tsconfig.json ./packages/types/
+COPY packages/types/src ./packages/types/src
 COPY src ./src
 
 RUN npm run build
@@ -20,15 +27,18 @@ FROM --platform=linux/amd64 node:20-alpine AS runner
 
 WORKDIR /app
 
-# Non-root user for security
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+
+COPY packages/types/package.json ./packages/types/
+
+RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=builder /app/dist ./dist
 
-# Switch to non-root
 USER appuser
 
 EXPOSE 8080

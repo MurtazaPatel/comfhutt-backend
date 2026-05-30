@@ -1,4 +1,4 @@
-name: CI/CD — Cloud Run Deploy
+name: CI/CD — Azure Container Apps Deploy
 
 on:
   push:
@@ -6,11 +6,10 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_ID: ${{ secrets.PROJECT_ID }}
-  REGION: asia-south1
-  SERVICE_NAME: comfhutt-backend
-  REGISTRY: asia-south1-docker.pkg.dev
-  IMAGE: asia-south1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/comfhutt-backend/api
+  RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  CONTAINER_APP: ${{ secrets.AZURE_CONTAINER_APP }}
+  ACR_SERVER: ${{ secrets.AZURE_REGISTRY }}
+  IMAGE_NAME: crux-backend/api
 
 jobs:
   deploy:
@@ -25,59 +24,58 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ── 2. Authenticate to Google Cloud ──────────────────────
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+      # ── 2. Log in to Azure via OIDC ──────────────────────────
+      - name: Azure login
+        uses: azure/login@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # ── 3. Set up gcloud CLI ──────────────────────────────────
-      - name: Set up gcloud CLI
-        uses: google-github-actions/setup-gcloud@v2
+      # ── 3. Log in to ACR ─────────────────────────────────────
+      - name: ACR login
+        run: |
+          az acr login --name $(echo $ACR_SERVER | cut -d. -f1)
 
-      # ── 4. Configure Docker for Artifact Registry ─────────────
-      - name: Configure Docker credential helper
-        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
-
-      # ── 5. Build Docker image (linux/amd64 for Cloud Run) ─────
+      # ── 4. Build Docker image ────────────────────────────────
       - name: Build Docker image
         run: |
           docker build \
             --platform linux/amd64 \
-            -t ${{ env.IMAGE }}:latest \
-            -t ${{ env.IMAGE }}:${{ github.sha }} \
+            -t $ACR_SERVER/$IMAGE_NAME:latest \
+            -t $ACR_SERVER/$IMAGE_NAME:${{ github.sha }} \
             .
 
-      # ── 6. Push both tags to Artifact Registry ────────────────
-      - name: Push Docker image
+      # ── 5. Push to ACR ───────────────────────────────────────
+      - name: Push to ACR
         run: |
-          docker push ${{ env.IMAGE }}:latest
-          docker push ${{ env.IMAGE }}:${{ github.sha }}
+          docker push $ACR_SERVER/$IMAGE_NAME:latest
+          docker push $ACR_SERVER/$IMAGE_NAME:${{ github.sha }}
 
-      # ── 7. Deploy to Cloud Run (SHA tag for traceability) ─────
-      - name: Deploy to Cloud Run
-        run: |
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image=${{ env.IMAGE }}:${{ github.sha }} \
-            --platform=managed \
-            --region=${{ env.REGION }} \
-            --allow-unauthenticated \
-            --quiet
+      # ── 6. Deploy to Azure Container Apps ────────────────────
+      - name: Deploy to Container Apps
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          resourceGroup: ${{ env.RESOURCE_GROUP }}
+          containerAppName: ${{ env.CONTAINER_APP }}
+          imageToDeploy: ${{ env.ACR_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          targetPort: 8080
+          ingress: external
 
-      # ── 8. Health check after deploy ──────────────────────────
+      # ── 7. Health check ──────────────────────────────────────
       - name: Health check
         run: |
-          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-            --platform=managed \
-            --region=${{ env.REGION }} \
-            --format='value(status.url)')
+          FQDN=$(az containerapp show \
+            --resource-group $RESOURCE_GROUP \
+            --name $CONTAINER_APP \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
 
-          echo "Service URL: $SERVICE_URL"
+          echo "Service URL: https://$FQDN"
 
-          # Retry up to 5 times with 10s between attempts (Cloud Run cold start)
           for i in 1 2 3 4 5; do
             echo "Health check attempt $i..."
-            if curl --fail --silent --max-time 15 "$SERVICE_URL/health"; then
+            if curl --fail --silent --max-time 15 "https://$FQDN/health"; then
               echo ""
               echo "✅ Health check passed!"
               exit 0
@@ -89,20 +87,20 @@ jobs:
           echo "❌ Health check failed after 5 attempts"
           exit 1
 
-      # ── 9. Job summary ────────────────────────────────────────
+      # ── 8. Job summary ───────────────────────────────────────
       - name: Post deployment summary
         run: |
-          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-            --platform=managed \
-            --region=${{ env.REGION }} \
-            --format='value(status.url)')
+          FQDN=$(az containerapp show \
+            --resource-group $RESOURCE_GROUP \
+            --name $CONTAINER_APP \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
 
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## ■ Deployment Summary (Azure)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Key | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Service** | \`${{ env.SERVICE_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Region** | \`${{ env.REGION }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Service** | \`${{ env.CONTAINER_APP }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Image SHA** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Service URL** | $SERVICE_URL |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Health** | [$SERVICE_URL/health]($SERVICE_URL/health) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Service URL** | https://$FQDN |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Health** | [https://$FQDN/health](https://$FQDN/health) |" >> $GITHUB_STEP_SUMMARY

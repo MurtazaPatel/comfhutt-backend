@@ -19,6 +19,9 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Kilo local config (contains MCP secrets)
+.kilo/kilo.json
+
 # GCP service account keys — never commit
 github-actions-key.json
 *.json.key
