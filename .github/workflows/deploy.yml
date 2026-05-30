@@ -52,7 +52,24 @@ jobs:
           docker push $ACR_SERVER/$IMAGE_NAME:latest
           docker push $ACR_SERVER/$IMAGE_NAME:${{ github.sha }}
 
-      # ── 6. Deploy to Azure Container Apps ────────────────────
+      # ── 6. Configure ACR pull access ─────────────────────────
+      - name: Configure Container App ACR access
+        run: |
+          ACR_USERNAME=$(az acr credential show \
+            --name $(echo $ACR_SERVER | cut -d. -f1) \
+            --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show \
+            --name $(echo $ACR_SERVER | cut -d. -f1) \
+            --query "passwords[0].value" -o tsv)
+
+          az containerapp registry set \
+            --resource-group $RESOURCE_GROUP \
+            --name $CONTAINER_APP \
+            --server $ACR_SERVER \
+            --username "$ACR_USERNAME" \
+            --password "$ACR_PASSWORD"
+
+      # ── 7. Deploy to Azure Container Apps ────────────────────
       - name: Deploy to Container Apps
         uses: azure/container-apps-deploy-action@v2
         with:
@@ -62,7 +79,7 @@ jobs:
           targetPort: 8080
           ingress: external
 
-      # ── 7. Health check ──────────────────────────────────────
+      # ── 8. Health check ──────────────────────────────────────
       - name: Health check
         run: |
           FQDN=$(az containerapp show \
@@ -87,7 +104,7 @@ jobs:
           echo "❌ Health check failed after 5 attempts"
           exit 1
 
-      # ── 8. Job summary ───────────────────────────────────────
+      # ── 9. Job summary ───────────────────────────────────────
       - name: Post deployment summary
         run: |
           FQDN=$(az containerapp show \
