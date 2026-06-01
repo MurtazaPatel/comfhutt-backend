@@ -113,8 +113,8 @@ const CITY_AUTHORITY_URLS: Record<string, string[]> = {
   ],
 }
 
-export function getCityAuthorityUrls(city: string): string[] {
-  const key = city.toLowerCase().trim().replace(/\s+/g, '')
+export function getCityAuthorityUrls(city: string | null | undefined): string[] {
+  const key = (city || '').toLowerCase().trim().replace(/\s+/g, '')
   return CITY_AUTHORITY_URLS[key] ?? []
 }
 

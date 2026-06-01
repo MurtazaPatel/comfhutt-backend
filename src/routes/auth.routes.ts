@@ -68,12 +68,24 @@ router.get(
 
       // Fetch CRUX profile from Supabase
       const profile = await getUserFromSupabase(userId);
-      if (!profile)
-        throw new AppError(
-          404,
-          "USER_NOT_FOUND",
-          "User profile not found after sync."
-        );
+
+      // Handle new-user race condition: Clerk webhook may not have fired yet.
+      // syncUserToSupabase already upserted the row, so if profile is still null
+      // it means a DB propagation delay. Return a safe synthetic new-user profile
+      // so the frontend can redirect to onboarding without a 404 error.
+      if (!profile) {
+        return res.json({
+          userId,
+          email: primaryEmail,
+          phone: primaryPhone,
+          displayName,
+          planTier: "free",
+          watchCredits: 3,
+          totalSearches: 0,
+          isNewUser: true,
+          createdAt: new Date().toISOString(),
+        });
+      }
 
       return res.json({
         userId: profile.clerk_user_id,
@@ -106,9 +118,16 @@ router.patch(
       if (!userId)
         throw new AppError(401, "UNAUTHORIZED", "Authentication required.");
 
+      const { role, city, budget } = req.body || {};
+
       const { error } = await supabase
         .from("crux_users")
-        .update({ onboarding_completed: true })
+        .update({ 
+          onboarding_completed: true,
+          role: typeof role === "string" ? role : null,
+          city: typeof city === "string" ? city : null,
+          budget: typeof budget === "string" ? budget : null,
+        })
         .eq("clerk_user_id", userId);
 
       if (error) {

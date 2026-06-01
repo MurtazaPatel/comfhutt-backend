@@ -41,19 +41,19 @@ export const scoreComputeLimit = rateLimit({
   handler: rateLimitHandler,
 })
 
-// POST /crux/lens/session — 20 sessions per IP per hour (prevent session spam)
+// POST /crux/lens/session — 100 sessions per IP per hour (prevent session spam)
 export const lensSessionLimit = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 20,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   handler: rateLimitHandler,
 })
 
-// POST /crux/lens/:session_id/message — 100 per IP per day (Gemini cost protection)
+// POST /crux/lens/:session_id/message — 500 per IP per day (Gemini cost protection)
 export const lensMessageLimit = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
-  max: 100,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   handler: rateLimitHandler,
@@ -75,6 +75,36 @@ export const cardGenerationLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: rateLimitHandler,
+})
+
+// POST /api/auth/login — 5 per IP per minute (brute-force protection)
+export const authLoginLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+  message: { error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Try again in 1 minute.', status: 429 } },
+})
+
+// POST /api/auth/login — 20 per IP per 15 minutes (sustained attack ceiling)
+export const authLoginWindowLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+  message: { error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Try again later.', status: 429 } },
+})
+
+// POST /api/auth/register — 3 per IP per hour (registration abuse protection)
+export const authRegisterLimit = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+  message: { error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many registration attempts. Try again later.', status: 429 } },
 })
 
 // GET /crux/card/share/:share_token — 200 per IP per hour (public, generous)

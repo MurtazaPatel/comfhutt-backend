@@ -109,6 +109,29 @@ const VALID_INTENTS: IntentProfile[] = ['yield', 'appreciation', 'balanced'];
 const VALID_LIFECYCLES: LifecycleStage[] = ['near_completion', 'delivered'];
 const VALID_CYCLES: MacroCycle[] = ['growth', 'correction'];
 
+/** Compute a human-readable grade from a composite score */
+function gradeFromScore(score: number): string {
+  if (score >= 85) return 'Excellent';
+  if (score >= 70) return 'Good';
+  if (score >= 55) return 'Fair';
+  if (score >= 40) return 'Caution';
+  return 'Risk';
+}
+
+/** Fetch address_raw for a given property_id — non-fatal (returns null on error) */
+async function getPropertyAddress(property_id: string): Promise<string | null> {
+  try {
+    const { data } = await supabase
+      .from('crux_properties')
+      .select('address_raw')
+      .eq('id', property_id)
+      .maybeSingle();
+    return data?.address_raw ?? null;
+  } catch {
+    return null;
+  }
+}
+
 router.get('/crux/score/:property_id',
   requireAuth,
   scoreFetchLimit,
@@ -145,7 +168,12 @@ router.get('/crux/score/:property_id',
           success: true,
           data: {
             ...cached.score_snapshot,
-            propertyId: cached.property_id,
+            score_composite: cached.score_snapshot.score_composite ?? cached.score_snapshot.totalScore,
+            score_breakdown: cached.score_snapshot.score_breakdown ?? cached.score_snapshot.categoryScores,
+            confidence_score: cached.score_snapshot.confidence_score ?? cached.score_snapshot.confidence,
+            created_at: cached.score_snapshot.created_at ?? cached.score_snapshot.timestamp,
+            weight_adjustments: cached.score_snapshot.weight_adjustments ?? [],
+            property_id: cached.property_id,
             shareToken: cached.share_token,
             fromCache: true,
             cachedAt: cached.searched_at,
@@ -161,19 +189,16 @@ router.get('/crux/score/:property_id',
         macro_cycle as MacroCycle,
       );
 
+      const addressRaw = await getPropertyAddress(property_id);
+      const grade = gradeFromScore(score.score_composite);
+
       await persistSearch({
         clerkUserId: userId,
         propertyId: property_id,
-        addressRaw: null,
+        addressRaw,
         cruxScore: score.score_composite,
-        scoreGrade: 'Unknown',
-        scoreSnapshot: {
-          totalScore: score.score_composite,
-          grade: 'Unknown',
-          categoryScores: score.score_breakdown,
-          confidence: score.confidence_score,
-          timestamp: new Date().toISOString(),
-        },
+        scoreGrade: grade,
+        scoreSnapshot: score,
         shareToken: null,
       });
 
@@ -223,19 +248,16 @@ router.post('/crux/score/:property_id/compute',
         macro_cycle as MacroCycle,
       );
 
+      const addressRaw = await getPropertyAddress(property_id);
+      const grade = gradeFromScore(score.score_composite);
+
       await persistSearch({
         clerkUserId: userId,
         propertyId: property_id,
-        addressRaw: null,
+        addressRaw,
         cruxScore: score.score_composite,
-        scoreGrade: 'Unknown',
-        scoreSnapshot: {
-          totalScore: score.score_composite,
-          grade: 'Unknown',
-          categoryScores: score.score_breakdown,
-          confidence: score.confidence_score,
-          timestamp: new Date().toISOString(),
-        },
+        scoreGrade: grade,
+        scoreSnapshot: score,
         shareToken: null,
       });
 

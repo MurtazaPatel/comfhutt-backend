@@ -12,7 +12,7 @@ interface ClerkUserPayload {
 export async function syncUserToSupabase(
   payload: ClerkUserPayload
 ): Promise<void> {
-  const { clerkUserId, email, phone, displayName, provisionedVia } = payload;
+  const { clerkUserId, email, phone, displayName } = payload;
 
   const { error } = await supabase
     .from("crux_users")
@@ -22,11 +22,11 @@ export async function syncUserToSupabase(
         email: email ?? null,
         phone: phone ?? null,
         display_name: displayName ?? null,
-        provisioned_via: provisionedVia,
+        updated_at: new Date().toISOString(),
       },
       {
         onConflict: "clerk_user_id",
-        ignoreDuplicates: true,
+        // ignoreDuplicates removed so profile fields (name, email) are updated on every sync
       }
     );
 

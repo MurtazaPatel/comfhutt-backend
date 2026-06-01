@@ -6,6 +6,9 @@ import {
   rateLimiter,
   requestIdMiddleware,
   errorHandler,
+  csrfProtection,
+  authMonitor,
+  responseCache,
 } from "./middleware";
 import webhooksRouter from "./routes/webhooks.routes";
 import routes from "./routes";
@@ -33,8 +36,17 @@ export function createApp(): express.Application {
   // ── Clerk session verification ────────────────────────
   app.use(clerkMiddleware());
 
+  // ── CSRF origin validation for state-changing requests ──
+  app.use(csrfProtection);
+
   // ── Global rate backstop (300 req / 15 min / IP) ──────
   app.use(rateLimiter);
+
+  // ── Response cache for public read endpoints ──────────
+  app.use(responseCache);
+
+  // ── Structured auth monitoring ────────────────────────
+  app.use(authMonitor);
 
   // ── Routes ────────────────────────────────────────────
   app.use(routes);

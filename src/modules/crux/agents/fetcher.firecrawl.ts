@@ -335,7 +335,7 @@ const CPWD_SCHEMA = {
 // ── Stale fallback data ──────────────────────────────────────────────────────
 
 function buildAqiStaleFallback(city: string): CpcbAqiData {
-  const cityLower = city.toLowerCase()
+  const cityLower = (city || '').toLowerCase()
   const aqiMap: Record<string, number> = {
     ahmedabad: 160, mumbai: 180, delhi: 280, bangalore: 90,
     bengaluru: 90, pune: 140, hyderabad: 150, chennai: 120,
@@ -374,7 +374,7 @@ const RESIDEX_MOCK: Record<string, ResidexMockEntry> = {
 }
 
 function buildResidexStaleFallback(city: string): NhbResidexData | undefined {
-  const key = city.toLowerCase().trim()
+  const key = (city || '').toLowerCase().trim()
   const entry = RESIDEX_MOCK[key]
   if (!entry) return undefined
   return {
@@ -404,7 +404,7 @@ const CPWD_RATES_MOCK: Record<string, CpwdMockEntry> = {
 }
 
 function buildCpwdStaleFallback(state: string): CpwdData {
-  const key = state.toLowerCase().trim().replace(/ /g, '_')
+  const key = (state || '').toLowerCase().trim().replace(/ /g, '_')
   const entry = CPWD_RATES_MOCK[key] ?? {
     city_tier: 'tier3' as const,
     construction_cost_per_sqft: 130000,
@@ -445,8 +445,8 @@ export async function fetchCpcbAqiFirecrawl(profile: PropertyProfile): Promise<F
     }
   } catch {}
 
-  const stateSlug = profile.state.toLowerCase().replace(/\s+/g, '-')
-  const citySlug = profile.city.toLowerCase().replace(/\s+/g, '-')
+  const stateSlug = (profile.state || '').toLowerCase().replace(/\s+/g, '-')
+  const citySlug = (profile.city || '').toLowerCase().replace(/\s+/g, '-')
   const scrapeUrls = [
     `https://www.aqi.in/dashboard/india/${stateSlug}/${citySlug}`,
     `https://app.cpcbccr.com/caaqms/caaqms_viewData_v2`,

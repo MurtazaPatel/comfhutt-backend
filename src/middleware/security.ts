@@ -16,6 +16,9 @@ export const helmetMiddleware = helmet({
       frameSrc: ["'none'"],
     },
   },
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: { policy: 'same-origin' },
+  crossOriginResourcePolicy: { policy: 'same-site' },
   noSniff: true,
   frameguard: { action: 'deny' },
   hsts: {
@@ -28,6 +31,7 @@ export const helmetMiddleware = helmet({
   ieNoOpen: true,
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+  dnsPrefetchControl: { allow: false },
 })
 
 // Global backstop — 300 requests per 15-minute window per IP.
