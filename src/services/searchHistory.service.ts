@@ -3,11 +3,20 @@ import { AppError } from '../modules/crux/shared/errors';
 import type { ScoreBreakdown } from '../modules/crux/shared/types';
 
 interface ScoreSnapshot {
-  totalScore: number;
-  grade: string;
-  categoryScores: ScoreBreakdown;
-  confidence: number;
-  timestamp: string;
+  // Legacy fields
+  totalScore?: number;
+  grade?: string;
+  categoryScores?: ScoreBreakdown;
+  confidence?: number;
+  timestamp?: string;
+  
+  // New format fields (CruxScore)
+  score_composite?: number;
+  score_breakdown?: ScoreBreakdown;
+  confidence_score?: number;
+  created_at?: string;
+  weight_adjustments?: Array<any>;
+  [key: string]: any;
 }
 
 interface PersistSearchPayload {
