@@ -48,9 +48,12 @@ async function insertFetcherEvidence(
 
 export async function runUnifiedPipeline(
   property: PropertyProfile,
+  onProgress?: (msg: string) => void,
 ): Promise<UnifiedPipelineResult> {
+  if (onProgress) onProgress('Scanning primary sources (MCA21, eCourts)...');
   const fetcherOutput = await fetchAllSources(property)
 
+  if (onProgress) onProgress('Invoking AI Research Agent for market insights...');
   let researchOutput: ResearchRunResult | null = null
   try {
     researchOutput = await runResearch({
@@ -65,6 +68,7 @@ export async function runUnifiedPipeline(
   let verificationDigest: VerificationDigest | null = null;
 
   if (researchOutput) {
+    if (onProgress) onProgress('Structuring evidence from fetcher & research output...');
     const fetcherEvidence = fetcherOutputToEvidenceItems(
       fetcherOutput,
       researchOutput.run.id,
@@ -72,6 +76,7 @@ export async function runUnifiedPipeline(
     );
     await insertFetcherEvidence(fetcherEvidence);
 
+    if (onProgress) onProgress('Running Verification Agent to validate claims...');
     try {
       verificationOutput = await runVerification({
         property_id: property.id,

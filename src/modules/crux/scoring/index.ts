@@ -15,6 +15,7 @@ async function computeAndPersist(
   intent: IntentProfile,
   lifecycle: LifecycleStage,
   macroCycle: MacroCycle,
+  onProgress?: (msg: string) => void,
 ): Promise<CruxScore> {
   const { data: row, error: fetchErr } = await supabase
     .from('crux_properties')
@@ -27,10 +28,12 @@ async function computeAndPersist(
 
   const profile = row as unknown as PropertyProfile;
 
-  const pipelineResult = await runUnifiedPipeline(profile);
+  if (onProgress) onProgress('Initiating automated analysis pipeline...');
+  const pipelineResult = await runUnifiedPipeline(profile, onProgress);
 
   const verifiedEvidence = pipelineResult.verificationDigest?.verified_items ?? [];
 
+  if (onProgress) onProgress('Compiling composite CRUX score...');
   const score = await computeScore(
     pipelineResult.fetcherOutput,
     intent,
@@ -38,6 +41,8 @@ async function computeAndPersist(
     macroCycle,
     verifiedEvidence.length > 0 ? verifiedEvidence : undefined,
   );
+
+  if (onProgress) onProgress('Finalizing and saving results...');
 
   const { error: upsertErr } = await supabase
     .from('crux_scores')
@@ -81,6 +86,7 @@ export async function getOrComputeScore(
   intent: IntentProfile,
   lifecycle: LifecycleStage,
   macroCycle: MacroCycle,
+  onProgress?: (msg: string) => void,
 ): Promise<CruxScore> {
   const { data: cached } = await supabase
     .from('crux_scores')
@@ -92,7 +98,7 @@ export async function getOrComputeScore(
 
   if (cached) return cached as unknown as CruxScore;
 
-  return computeAndPersist(propertyId, intent, lifecycle, macroCycle);
+  return computeAndPersist(propertyId, intent, lifecycle, macroCycle, onProgress);
 }
 
 export async function forceRecomputeScore(
@@ -100,6 +106,7 @@ export async function forceRecomputeScore(
   intent: IntentProfile,
   lifecycle: LifecycleStage,
   macroCycle: MacroCycle,
+  onProgress?: (msg: string) => void,
 ): Promise<CruxScore> {
-  return computeAndPersist(propertyId, intent, lifecycle, macroCycle);
+  return computeAndPersist(propertyId, intent, lifecycle, macroCycle, onProgress);
 }

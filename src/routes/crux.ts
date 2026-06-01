@@ -11,6 +11,7 @@ import { streamLensMessage } from '../modules/crux/agents/lens.agent'
 import { generateReport } from '../modules/crux/agents/report.agent';
 import { getLatestResearch, runResearch } from '../modules/crux/agents/research.agent';
 import { getLatestVerification, runVerification } from '../modules/crux/agents/verification.agent';
+import { computationManager } from '../modules/crux/scoring/computationManager';
 import { createSession, getSession, getMessageHistory } from '../modules/crux/lens/lens.service';
 import { generateCard } from '../modules/crux/card/card.generator';
 import { getCardByToken } from '../modules/crux/card/card.service';
@@ -131,6 +132,89 @@ async function getPropertyAddress(property_id: string): Promise<string | null> {
     return null;
   }
 }
+
+router.get('/crux/score/:property_id/stream',
+  requireAuth,
+  scoreFetchLimit,
+  validateParam('property_id', UUIDSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    console.info('CRUX GET /crux/score/:property_id/stream hit');
+    const rawId = req.params.property_id;
+    const property_id = Array.isArray(rawId) ? (rawId[0] ?? '') : rawId;
+    const intent = typeof req.query.intent === 'string' ? req.query.intent : 'balanced';
+    const lifecycle = typeof req.query.lifecycle === 'string' ? req.query.lifecycle : 'delivered';
+    const macro_cycle = typeof req.query.macro_cycle === 'string' ? req.query.macro_cycle : 'growth';
+
+    if (!VALID_INTENTS.includes(intent as IntentProfile)) {
+      res.status(400).json({ success: false, error: 'VALIDATION_ERROR', message: `intent must be one of: ${VALID_INTENTS.join(', ')}` });
+      return;
+    }
+    if (!VALID_LIFECYCLES.includes(lifecycle as LifecycleStage)) {
+      res.status(400).json({ success: false, error: 'VALIDATION_ERROR', message: `lifecycle must be one of: ${VALID_LIFECYCLES.join(', ')}` });
+      return;
+    }
+    if (!VALID_CYCLES.includes(macro_cycle as MacroCycle)) {
+      res.status(400).json({ success: false, error: 'VALIDATION_ERROR', message: `macro_cycle must be one of: ${VALID_CYCLES.join(', ')}` });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    req.on('close', () => {
+      res.end();
+    });
+
+    res.on('error', (err) => {
+      console.error('[SSE Response Error]', err);
+    });
+
+    const { userId } = getAuth(req);
+
+    try {
+      computationManager.streamScoreComputation(
+        property_id,
+        intent as IntentProfile,
+        lifecycle as LifecycleStage,
+        macro_cycle as MacroCycle,
+        (event) => {
+          if (res.writableEnded || res.destroyed) return;
+          try {
+            res.write(`data: ${JSON.stringify(event)}\n\n`);
+            
+            if (event.type === 'done' && userId) {
+              const score = event.data;
+              getPropertyAddress(property_id).then(addressRaw => {
+                persistSearch({
+                  clerkUserId: userId,
+                  propertyId: property_id,
+                  addressRaw,
+                  cruxScore: score.score_composite,
+                  scoreGrade: gradeFromScore(score.score_composite),
+                  scoreSnapshot: score,
+                  shareToken: null,
+                }).catch(err => {
+                  console.error('[Stream persistSearch Error]', err);
+                });
+              });
+            }
+
+            if (event.type === 'done' || event.type === 'error') {
+              res.end();
+            }
+          } catch (err) {
+            console.error('[SSE Write Error]', err);
+          }
+        }
+      );
+    } catch (err) {
+      console.error('[streamScoreComputation] error:', err);
+      res.write(`data: ${JSON.stringify({ type: 'error', data: err instanceof Error ? err.message : 'Unknown error' })}\n\n`);
+      res.end();
+    }
+  });
 
 router.get('/crux/score/:property_id',
   requireAuth,

@@ -277,12 +277,16 @@ export async function streamLensMessage(
     error?: string
     message?: string
   }): void {
+    if (res.writableEnded || res.destroyed) return;
     try {
       res.write(`data: ${JSON.stringify(data)}\n\n`)
     } catch {
       // client disconnected — ignore
     }
   }
+
+  res.on('close', () => res.end());
+  res.on('error', (err) => console.error('[Lens SSE Error]', err));
 
   let fullAssistantText = ''
 

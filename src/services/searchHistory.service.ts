@@ -68,19 +68,36 @@ export async function getRecentSearches(
   clerkUserId: string,
   limit = 10
 ): Promise<SearchHistoryRow[]> {
+  // Fetch a larger batch so we can deduplicate by property_id
   const { data, error } = await supabase
     .from('crux_searches')
     .select('id, property_id, address_raw, crux_score, score_grade, score_snapshot, share_token, searched_at')
     .eq('clerk_user_id', clerkUserId)
     .order('searched_at', { ascending: false })
-    .limit(limit);
+    .limit(limit * 5); // fetch enough to ensure we get distinct ones
 
   if (error) {
     console.error({ error, clerkUserId }, 'SearchHistory: fetch failed');
     throw new AppError(500, 'SEARCH_FETCH_FAILED', 'Failed to fetch search history.');
   }
 
-  return (data ?? []) as SearchHistoryRow[];
+  const rawRows = (data ?? []) as SearchHistoryRow[];
+  
+  // Deduplicate by property_id, keeping the most recent (which is first due to order by searched_at desc)
+  const uniqueSearches: SearchHistoryRow[] = [];
+  const seenProperties = new Set<string>();
+
+  for (const row of rawRows) {
+    if (!seenProperties.has(row.property_id)) {
+      seenProperties.add(row.property_id);
+      uniqueSearches.push(row);
+      if (uniqueSearches.length >= limit) {
+        break;
+      }
+    }
+  }
+
+  return uniqueSearches;
 }
 
 export async function findRecentSearch(
